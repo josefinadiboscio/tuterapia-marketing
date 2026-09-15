@@ -29,7 +29,20 @@ Base MySQL de solo lectura: `tuterapiaweb`, usuario dedicado con `SELECT`.
 - **Fecha de pago** = `pacientes_pagos.creacion`. **No usar `fecha`**: es un
   valor calculado a futuro (vencimiento del paquete), idéntico entre filas.
 - **País** = `login.paisDominio`. `paisIp` solo para análisis de tráfico.
+  Verificado: el país del pago coincide con el del login salvo en 9 filas de
+  117.712, así que el del login manda siempre.
 - **Chile** (`CL`) se excluye de todo el dashboard.
+- **Zona horaria.** La base guarda en UTC (`NOW()` = `UTC_TIMESTAMP()`), pero
+  **los meses se cortan en hora local, UTC−3**. Un registro de las 21:30 del
+  31 de agosto es de agosto, aunque en UTC figure como 1 de septiembre. El
+  filtro se aplica como rango UTC corrido tres horas, no convirtiendo fila por
+  fila, para no perder el índice.
+- **`login.active` no filtra.** Los 127.381 registros con `tipo = 1` tienen
+  `active = 1`; solo se desactivan terapeutas.
+- **`pacientes.terminarRegistro` tampoco filtra.** 89.401 de 127.381 registros
+  lo tienen en 0. Sea cual sea el lado que marca, son registros igual: lo que
+  está en juego es tener o no terapeuta asignado, que es una etapa del funnel
+  a mostrar, no un motivo de exclusión.
 
 ---
 
@@ -105,6 +118,10 @@ Para pagos en `U$S` se omite la división por tipo de cambio.
 LTV_usd = sesiones_realizadas_por_paciente × margen_usd_sesion
 ```
 
+**Los dos factores se muestran por separado**, además del producto: cuántas
+sesiones hace un paciente y cuántos dólares deja cada sesión. Un LTV que se
+mueve no dice cuál de los dos se movió, y son palancas distintas.
+
 Sobre **sesiones realizadas**, no compradas. El saldo sin usar
 (`sesiones - usadas`) es pasivo, no ganancia, y es justamente lo que deja el
 que abandona.
@@ -115,12 +132,19 @@ terminaron su ciclo; incluirlos subestima el LTV.
 ### CAC
 
 ```
-CAC_usd = gasto_usd[mes, pais, canal] / pacientes_nuevos[cohorte de registro de ese mes]
+CAC_usd = gasto_usd[mes, pais] / pacientes_nuevos[mes, pais]
 ```
 
-El denominador son **activados, no registros**. El gasto se carga manual en
-USD, ya dolarizado — ese lado no necesita conversión. Solo entra gasto de
-canales pagos.
+Mes a mes, los dos lados sobre el mismo mes calendario. El denominador son
+**activados, no registros**: pacientes con su primera sesión realizada en el
+mes. El gasto se carga manual en USD, ya dolarizado — ese lado no necesita
+conversión.
+
+El gasto **no se atribuye hacia atrás** a la cohorte de registro, y el
+denominador son **todos** los pacientes nuevos, no solo los que llegaron por
+un `utm_source` pago. Es una simplificación deliberada: mezcla adquisición
+orgánica con gasto pago, así que el CAC que muestra el tablero es más barato
+que el CAC puro de los canales pagos.
 
 ### LTV / CAC
 
@@ -168,9 +192,9 @@ el que muestra el tablero, no peor.
 | Registros | `login` con `tipo = 1`, por mes de `creacion` | — |
 | Pacientes nuevos | Pacientes con su **primera sesión realizada** en el mes | Se asignan al mes de la sesión |
 | Pacientes activos | Con ≥1 sesión realizada en el mes | — |
-| Conversión | Nuevos ÷ registros **de la misma cohorte de registro** | Proyectada si < 30 días |
-| Mediana de compra | Días entre registro y primera sesión, con p80 al lado | Disponible desde el día uno |
-| Churn | Activos del mes N sin sesión en los 60 días siguientes | Se conoce con 2 meses de retraso |
+| Conversión | Nuevos ÷ registros **de la misma cohorte de registro**, ventana **fija de 30 días** | Proyectada si < 30 días |
+| Mediana de compra | Días entre registro y **primer pago confirmado**, con p80 al lado | Disponible desde el día uno |
+| Churn | Activos del mes N−1 sin sesión en el mes N | Se guarda en la fila del mes N |
 | Gasto USD | Carga manual en Admin | — |
 | CAC / LTV / LTV-CAC | Ver §4 | Solo margen |
 
@@ -184,7 +208,19 @@ el que muestra el tablero, no peor.
   anterior. Recalcular hacia atrás es un comando explícito, no un efecto del
   cron.
 - **Pagos con `monto = 0`** (promos, cortesías) cuentan en volumen y se
-  excluyen del ARPU y del LTV.
+  excluyen del ARPU y del LTV. Son 4.042 de 117.712 pagos confirmados.
+- **La ventana de conversión es fija.** Se cuenta la primera sesión realizada
+  dentro de los 30 días del registro y nada después. Un mes cerrado deja de
+  moverse. La cola real (6% convierte pasados los 60 días) queda afuera, lo
+  que subestima la conversión y encarece el CAC — el error va para el lado
+  seguro.
+- **El churn vive en la fila del mes en que se conoce.** El churn de los
+  activos de N−1 se calcula con las sesiones de N y se guarda en N. Así entra
+  en la ventana de escritura del job y no hace falta recalcular meses
+  cerrados.
+- **Dos curvas distintas.** Registro → primera sesión (§5) es la que proyecta
+  cohortes inmaduras. Registro → primer pago es la "mediana de compra" del
+  tablero. No son la misma distribución y no se mezclan.
 
 ---
 
@@ -221,7 +257,9 @@ create table marketing.utm_mapping (
 - **`es_pago` es crítico.** Instagram orgánico (`heylink.me`, `ig`) y Meta
   pago (`meta%`) comparten plataforma pero no gasto. Si se mezclan, el CAC
   sale artificialmente barato porque atribuye registros gratis al gasto de
-  ads. **Solo `es_pago = true` entra en el denominador del CAC.**
+  ads. `es_pago` sigue siendo la base para separar tráfico pago de orgánico en
+  Ads y en General. **No filtra el denominador del CAC**, que es el total de
+  pacientes nuevos del mes — ver §4.
 - **General** agrupa por plataforma. **Ads** muestra el `utm_source` completo.
 - Admin alerta cuando aparece un `utm_source` sin mapear con volumen
   relevante. El mapeo se mantiene al día solo.
@@ -261,6 +299,12 @@ create table marketing.metricas_mensuales (
 );
 ```
 
+`plataforma` y `pais` **no admiten null**: Postgres no acepta nulos en una
+clave primaria. El agregado de todas las plataformas se guarda con el literal
+`'TODAS'` y el de todos los países con `'TOTAL'`. El job los calcula y los
+escribe; la UI no los suma por su cuenta, porque una mediana o una conversión
+no son sumables.
+
 Upsert idempotente sobre la clave primaria. Nunca `insert` — el job puede
 correr dos veces.
 
@@ -272,8 +316,14 @@ un cron caído pasa desapercibido durante semanas.
 
 ## 9. Pendientes
 
-- [ ] Verificar que `precio_sesion × pct` se acerque a los 6 y 10 USD
-      estimados; si no, el estimado estaba viejo y manda la fórmula
+- [x] Verificar que `precio_sesion × pct` se acerque a los 6 y 10 USD
+      estimados. **Cuadra.** Últimos 6 meses: AR 33.214 ARS por sesión × 0,26
+      = 8.636 ARS, UY 1.468 UYU × 0,30 = 440 UYU. A un tipo de cambio cercano
+      a 1.440 y 44 eso da 6 y 10 USD.
+- [ ] **Pagos en `U$S` son otro precio, no el mismo convertido:** 43–44 USD
+      por sesión contra ~23 USD equivalentes en moneda local. Confirmar si
+      `pct_comision` aplica igual a esos pagos.
+- [ ] **Definir de dónde sale el LTV.** Pendiente de definición del negocio.
 - [ ] Sesiones promedio por paciente **sobre cohorte cerrada**, no sobre toda
       la base (el estimado de 9 y 13 puede estar inflado si excluye a los que
       hicieron una sola sesión)

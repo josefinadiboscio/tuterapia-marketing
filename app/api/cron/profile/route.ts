@@ -18,6 +18,18 @@ export const maxDuration = 60;
  * Temporary: delete once the queries are validated against Looker.
  */
 const PROBES: Record<string, string> = {
+  // Does terminarRegistro = 0 mean "no therapist yet"? Decides how the funnel
+  // stage is modelled, and the user's recollection points the other way.
+  terapeuta_vs_registro: `
+    SELECT p.terminarRegistro, COUNT(*) AS n,
+           SUM(p.id_terapeuta IS NULL) AS sin_terapeuta,
+           SUM(p.id_terapeuta IS NOT NULL) AS con_terapeuta
+      FROM pacientes p JOIN login l ON l.id = p.id_login
+     WHERE l.tipo = 1 GROUP BY p.terminarRegistro`,
+
+  // MySQL 8 has window functions, 5.7 does not. Decides how percentiles run.
+  version: `SELECT VERSION() AS version`,
+
   // Which account types exist, and whether `active` should filter registros.
   login_tipo_active: `
     SELECT tipo, active, COUNT(*) AS n

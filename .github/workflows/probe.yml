@@ -34,6 +34,6 @@ jobs:
             status=$(curl -sS -o body.txt -w '%{http_code}' \
               -H "Authorization: Bearer $SECRET" "${BASE%/}$path")
             echo "HTTP $status"
-            jq . body.txt 2>/dev/null || cat body.txt
+            jq -c . body.txt 2>/dev/null || cat body.txt
             echo
           done

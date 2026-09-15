@@ -3,9 +3,9 @@
 Dashboard de marketing de Tu Terapia. Reemplaza el reporting que hoy vive en
 Looker Studio.
 
-**Antes de escribir cualquier código, leé `METRICAS.md`.** Es la fuente de
-verdad de todas las definiciones de métricas. No inventes definiciones ni
-supongas reglas de negocio que no estén ahí.
+**Antes de escribir cualquier código, leé `METRICAS.md` y `BUILD.md`.**
+`METRICAS.md` es la fuente de verdad de todas las definiciones de métricas.
+`BUILD.md` es el plan de construcción por fases.
 
 ---
 
@@ -26,9 +26,9 @@ Si `METRICAS.md` no lo cubre, preguntá y después lo agregamos al documento.
 
 ```
 MySQL (tuterapiaweb, solo lectura)
-   │  job nocturno, agrega en SQL
+   │  Vercel Cron, nocturno, agrega en SQL
    ▼
-Railway  ·  servicio sync-marketing  ·  TypeScript  ·  IP estática
+/app/api/cron/sync  ·  route handler
    │  upsert idempotente
    ▼
 Supabase  ·  schema marketing  ·  tablas de agregados
@@ -37,15 +37,19 @@ Supabase  ·  schema marketing  ·  tablas de agregados
 Next.js en Vercel  ·  App Router  ·  Server Components
 ```
 
+Todo vive en un solo proyecto Next.js. El job de sincronización es un route
+handler disparado por Vercel Cron, no un servicio aparte.
+
 El dashboard **nunca** consulta MySQL en vivo. Lee solo de Supabase.
 
 ## Stack
 
 | Capa | Herramienta |
 |---|---|
-| Ingesta | Railway, TypeScript, `mysql2` |
+| App y job | Next.js App Router en Vercel |
+| Cron | Vercel Cron (`vercel.json`) |
+| Lectura | `mysql2/promise` |
 | Almacenamiento | Supabase (Postgres), schema `marketing` |
-| App | Next.js App Router en Vercel |
 | Auth | Supabase Auth, restringido al dominio de la empresa |
 | Gráficos | Tremor (copy-paste en el repo, Tailwind v4) |
 | Tablas | TanStack Table |
@@ -57,15 +61,17 @@ mantiene una sola persona.
 ## Estructura
 
 ```
-/METRICAS.md          definiciones — fuente de verdad
-/apps/web             Next.js
-/apps/sync            job de sincronización (Railway)
-/packages/metrics     tipos y fórmulas compartidas
-/supabase/migrations  migraciones versionadas
+/METRICAS.md              definiciones — fuente de verdad
+/BUILD.md                 plan por fases
+/app                      Next.js App Router
+  /api/cron/sync          job de sincronización
+/lib/metrics              fórmulas compartidas
+/lib/queries              consultas SQL a MySQL
+/supabase/migrations      migraciones versionadas
 ```
 
-Las fórmulas de `METRICAS.md` §4 viven en `packages/metrics` y las consumen
-tanto el job como la web. **Nunca duplicar un cálculo entre las dos.**
+Las fórmulas de `METRICAS.md` §4 viven en `lib/metrics` y las consumen tanto el
+job como la web. **Nunca duplicar un cálculo entre las dos.**
 
 ---
 
@@ -77,10 +83,12 @@ tanto el job como la web. **Nunca duplicar un cálculo entre las dos.**
   `email`, `fecha_nacimiento`). El dashboard es agregado: no necesita
   identificar a nadie.
 - Agregar del lado de MySQL y traer el resultado ya reducido. No traer filas
-  crudas para agregar en memoria.
+  crudas para agregar en memoria. El job tiene 60 segundos.
 - Sincronización incremental por fecha, no tabla completa.
 
 **Job**
+- Valida `Authorization: Bearer ${process.env.CRON_SECRET}` y devuelve 401 si
+  no coincide. La URL es pública.
 - Upsert idempotente sobre la clave primaria. Nunca `insert`.
 - Escribe solo el mes en curso y el anterior. Nunca recalcula meses cerrados.
 - Cada corrida escribe en `marketing.sync_log` (timestamp, filas, error).
@@ -88,7 +96,9 @@ tanto el job como la web. **Nunca duplicar un cálculo entre las dos.**
 
 **Credenciales**
 - Solo en variables de entorno. Nunca en el repo, nunca en un `.env`
-  commiteado. `.gitignore` con `.env` desde el primer commit.
+  commiteado. `.gitignore` con `.env*` desde el primer commit.
+- Si necesitás un valor de credencial, pedile al usuario que lo cargue en
+  Vercel. Nunca le pidas que lo pegue en el chat.
 
 **UI**
 - Los meses provisorios se marcan visualmente y no llevan delta.
@@ -99,18 +109,3 @@ tanto el job como la web. **Nunca duplicar un cálculo entre las dos.**
 
 **Idioma**
 - UI en español. Código, nombres de variables y commits en inglés.
-
----
-
-## Orden de construcción
-
-1. Queries de MySQL contra las definiciones de `METRICAS.md` — **y parar acá**
-   para validar los números contra Looker
-2. Migraciones del schema `marketing`
-3. Job de sincronización
-4. Pestaña Admin (parámetros, gasto, mapeo de UTMs)
-5. Pestaña General
-6. Ads y Funnel
-
-No avanzar al paso siguiente sin que el anterior esté validado. Un error en
-las queries se hereda hacia arriba y se descubre semanas después.

@@ -31,7 +31,9 @@ async function conectar(): Promise<Client> {
   const candidatos = candidatosDeConexion();
   if (candidatos.length === 0) {
     throw new Error(
-      "Falta SUPABASE_DB_PASSWORD (o SUPABASE_DB_URL) en las variables de entorno",
+      process.env.SUPABASE_DB_PASSWORD?.trim()
+        ? "SUPABASE_DB_PASSWORD esta cargada pero no se pudo resolver el proyecto"
+        : "Falta SUPABASE_DB_PASSWORD en las variables de entorno de Vercel",
     );
   }
 
@@ -64,8 +66,8 @@ function candidatosDeConexion(): { host: string; url: string }[] {
   }
 
   const password = process.env.SUPABASE_DB_PASSWORD?.trim();
+  if (!password) return [];
   const ref = refDelProyecto();
-  if (!password || !ref) return [];
 
   // Encoded here so a password with @ or : cannot break the URL — the exact
   // failure that made the dashboard string unusable.
@@ -90,14 +92,23 @@ function poolers(ref: string, secreto: string, region: string, n: number) {
   };
 }
 
-/** The project ref is the subdomain of the public Supabase URL. */
-function refDelProyecto(): string | null {
+/**
+ * The project ref is the subdomain of the public Supabase URL. It is not a
+ * secret — it is visible in every request the browser makes — so it is also
+ * hardcoded as a fallback: the connection should not break because one more
+ * environment variable went missing.
+ */
+const REF_POR_DEFECTO = "qhfpvmhcxnbyzrxtakav";
+
+function refDelProyecto(): string {
   const explicito = process.env.SUPABASE_PROJECT_REF?.trim();
   if (explicito) return explicito;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  if (!url || !esUrlValida(url)) return null;
-  return new URL(url).hostname.split(".")[0] ?? null;
+  if (url && esUrlValida(url)) {
+    return new URL(url).hostname.split(".")[0] || REF_POR_DEFECTO;
+  }
+  return REF_POR_DEFECTO;
 }
 
 function esUrlValida(value: string): boolean {

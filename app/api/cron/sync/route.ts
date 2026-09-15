@@ -1,48 +1,91 @@
 import { NextResponse } from "next/server";
 import { withMysql } from "@/lib/mysql";
+import { withDb } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/auth";
+import { sincronizarMes, mesesAEscribir } from "@/lib/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Sync job. Triggered by Vercel Cron (see vercel.json) and reachable by hand
- * with the same bearer token. The URL is public, so the token is the only gate.
+ * The sync job. Vercel Cron calls it daily (see vercel.json); the same URL
+ * works by hand with the bearer token.
  *
- * Phase 0: connectivity probe only — counts patient accounts in MySQL.
- * The real aggregation lands in phase 3.
+ * Writes the current month and the previous one, and nothing else: a closed
+ * month is never recalculated by the cron. A backfill is an explicit command,
+ * ?meses=2026-07,2026-06, not a side effect of the schedule.
+ *
+ * Every run writes to marketing.sync_log, success or failure. Without that, a
+ * dead cron goes unnoticed for weeks.
  */
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const pedido = new URL(request.url).searchParams.get("meses");
+  const meses = pedido
+    ? pedido.split(",").map((m) => m.trim()).filter((m) => /^\d{4}-\d{2}$/.test(m))
+    : mesesAEscribir();
+
+  if (meses.length === 0) {
+    return NextResponse.json(
+      { error: "invalid ?meses=YYYY-MM,YYYY-MM" },
+      { status: 400 },
+    );
+  }
+
   const startedAt = Date.now();
+  let filas = 0;
 
   try {
-    const registros = await withMysql(async (conn) => {
-      const [rows] = await conn.query<
-        (import("mysql2").RowDataPacket & { n: number })[]
-      >("SELECT COUNT(*) AS n FROM login WHERE tipo = 1");
-      return Number(rows[0]?.n ?? 0);
+    await withMysql(async (mysql) => {
+      await withDb(async (db) => {
+        for (const mes of meses) {
+          filas += await sincronizarMes(mysql, db, mes);
+        }
+        await registrar(db, meses, filas, Date.now() - startedAt, null);
+      });
     });
 
     return NextResponse.json({
       ok: true,
-      registros,
+      meses,
+      filas,
       ms: Date.now() - startedAt,
     });
   } catch (error) {
+    const mensaje = error instanceof Error ? error.message : "unknown error";
     console.error("[cron/sync] failed", error);
+
+    // The log matters most when the run failed, so it is written on its own
+    // connection — the one that broke may be unusable.
+    try {
+      await withDb((db) =>
+        registrar(db, meses, filas, Date.now() - startedAt, mensaje),
+      );
+    } catch (logError) {
+      console.error("[cron/sync] could not write sync_log", logError);
+    }
+
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "unknown error",
-        ms: Date.now() - startedAt,
-      },
+      { ok: false, meses, error: mensaje, ms: Date.now() - startedAt },
       { status: 500 },
     );
   }
 }
 
+async function registrar(
+  db: import("pg").Client,
+  meses: string[],
+  filas: number,
+  duracionMs: number,
+  error: string | null,
+): Promise<void> {
+  await db.query(
+    `insert into marketing.sync_log (duracion_ms, meses, filas, error)
+     values ($1, $2, $3, $4)`,
+    [duracionMs, meses, filas, error],
+  );
+}

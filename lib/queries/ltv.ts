@@ -73,13 +73,21 @@ export async function precioPorSesion(
   conn: Connection,
   mes: string,
   pais: Pais,
-): Promise<{ moneda: string; pagos: number; precio_sesion: number }[]> {
+): Promise<
+  { moneda: string; pagos: number; sesiones: number; precio_sesion: number }[]
+> {
   const { start, end } = monthRangeUtc(mes);
   const [rows] = await conn.query<
-    (RowDataPacket & { moneda: string; pagos: number; precio_sesion: number })[]
+    (RowDataPacket & {
+      moneda: string;
+      pagos: number;
+      sesiones: number;
+      precio_sesion: number;
+    })[]
   >(
     `SELECT pp.moneda,
             COUNT(*) AS pagos,
+            SUM(pp.sesiones) AS sesiones,
             SUM(pp.monto) / SUM(pp.sesiones) AS precio_sesion
        FROM pacientes_pagos pp
        JOIN login l ON l.id = pp.id_paciente AND l.tipo = 1
@@ -92,6 +100,7 @@ export async function precioPorSesion(
   return rows.map((r) => ({
     moneda: r.moneda,
     pagos: Number(r.pagos),
+    sesiones: Number(r.sesiones),
     precio_sesion: Number(r.precio_sesion),
   }));
 }

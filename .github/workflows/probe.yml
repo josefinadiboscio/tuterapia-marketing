@@ -14,31 +14,26 @@ on:
         description: URL de produccion del dashboard
         required: true
         default: https://tuterapia-marketing.vercel.app
+      paths:
+        description: Rutas a consultar, separadas por espacios
+        required: true
+        default: /api/cron/sync /api/cron/schema /api/cron/profile
 
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: /api/cron/sync
-        continue-on-error: true
+      - name: Probe
         env:
           SECRET: ${{ secrets.CRON_SECRET }}
           BASE: ${{ inputs.base_url }}
+          PATHS: ${{ inputs.paths }}
         run: |
-          echo "--- HTTP status ---"
-          curl -sS -o body.txt -w '%{http_code}\n' \
-            -H "Authorization: Bearer $SECRET" "${BASE%/}/api/cron/sync"
-          echo "--- body ---"
-          jq . body.txt 2>/dev/null || cat body.txt
-
-      - name: /api/cron/schema
-        if: always()
-        env:
-          SECRET: ${{ secrets.CRON_SECRET }}
-          BASE: ${{ inputs.base_url }}
-        run: |
-          echo "--- HTTP status ---"
-          curl -sS -o body.txt -w '%{http_code}\n' \
-            -H "Authorization: Bearer $SECRET" "${BASE%/}/api/cron/schema"
-          echo "--- body ---"
-          jq . body.txt 2>/dev/null || cat body.txt
+          for path in $PATHS; do
+            echo "===== $path ====="
+            status=$(curl -sS -o body.txt -w '%{http_code}' \
+              -H "Authorization: Bearer $SECRET" "${BASE%/}$path")
+            echo "HTTP $status"
+            jq . body.txt 2>/dev/null || cat body.txt
+            echo
+          done

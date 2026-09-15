@@ -1,0 +1,44 @@
+# Manual probe for the phase 0 checkpoint.
+#
+# Calls the cron endpoints with the bearer token so the result can be read
+# from the Actions log, without needing a local terminal. The token lives in
+# the CRON_SECRET repository secret and is masked by GitHub in the output.
+#
+# Temporary: delete once the queries are validated against Looker.
+name: Probe cron endpoints
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: URL de produccion del dashboard
+        required: true
+        default: https://tuterapia-marketing.vercel.app
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: /api/cron/sync
+        continue-on-error: true
+        env:
+          SECRET: ${{ secrets.CRON_SECRET }}
+          BASE: ${{ inputs.base_url }}
+        run: |
+          echo "--- HTTP status ---"
+          curl -sS -o body.txt -w '%{http_code}\n' \
+            -H "Authorization: Bearer $SECRET" "${BASE%/}/api/cron/sync"
+          echo "--- body ---"
+          jq . body.txt 2>/dev/null || cat body.txt
+
+      - name: /api/cron/schema
+        if: always()
+        env:
+          SECRET: ${{ secrets.CRON_SECRET }}
+          BASE: ${{ inputs.base_url }}
+        run: |
+          echo "--- HTTP status ---"
+          curl -sS -o body.txt -w '%{http_code}\n' \
+            -H "Authorization: Bearer $SECRET" "${BASE%/}/api/cron/schema"
+          echo "--- body ---"
+          jq . body.txt 2>/dev/null || cat body.txt

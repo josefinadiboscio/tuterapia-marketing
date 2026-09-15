@@ -165,6 +165,12 @@ aplica a un marketplace de sesiones con ciclo corto.
 Distribución medida de días entre registro y primera sesión realizada
 (muestra: 7.473 conversiones desde enero 2025):
 
+**Ojo:** esta tabla mide registro → primera **sesión** realizada. Desde que
+pacientes nuevos y conversión se miden sobre la **venta**, la curva que usa el
+tablero para proyectar es la de registro → primer pago, que se calcula de los
+datos en cada corrida y es bastante más empinada. Esta queda como referencia
+del funnel, no como insumo de la proyección.
+
 | Percentil | Días |
 |---|---|
 | Mediana | 5 |
@@ -196,9 +202,9 @@ el que muestra el tablero, no peor.
 | Métrica | Definición | Regla |
 |---|---|---|
 | Registros | `login` con `tipo = 1`, por mes de `creacion` | — |
-| Pacientes nuevos | Pacientes con su **primera sesión realizada** en el mes | Se asignan al mes de la sesión |
+| Pacientes nuevos | Pacientes con su **primer pago confirmado** en el mes | Se asignan al mes de la venta |
 | Pacientes activos | Con ≥1 sesión realizada en el mes | — |
-| Conversión | Nuevos ÷ registros **de la misma cohorte de registro**, ventana **fija de 30 días** | Proyectada si < 30 días |
+| Conversión | Compradores ÷ registros **de la misma cohorte de registro**, ventana **fija de 30 días** | Proyectada si < 30 días |
 | Mediana de compra | Días entre registro y **primer pago confirmado**, con p80 al lado | Disponible desde el día uno |
 | Churn | Activos del mes N−1 sin sesión en el mes N | Se guarda en la fila del mes N |
 | Gasto USD | Carga manual en Admin | — |
@@ -224,9 +230,21 @@ el que muestra el tablero, no peor.
   activos de N−1 se calcula con las sesiones de N y se guarda en N. Así entra
   en la ventana de escritura del job y no hace falta recalcular meses
   cerrados.
-- **Dos curvas distintas.** Registro → primera sesión (§5) es la que proyecta
-  cohortes inmaduras. Registro → primer pago es la "mediana de compra" del
-  tablero. No son la misma distribución y no se mezclan.
+- **La venta es el hito, no la sesión.** Un paciente es nuevo cuando compra.
+  Medido contra la primera sesión realizada el número da ~6% menos (576 contra
+  613 en AR, agosto 2026): la diferencia son los que ya pagaron y todavía no
+  se sentaron con nadie.
+- **Conversión, pacientes nuevos y mediana de compra miden el mismo evento.**
+  Los tres cuelgan del primer pago confirmado, así que la curva de madurez que
+  proyecta cohortes inmaduras es la de registro → primer pago, no la de
+  registro → primera sesión de §5. Es mucho más empinada: la mediana compra el
+  mismo día que se registra y el p80 está en 3-6 días, así que una cohorte
+  está prácticamente cerrada a las dos semanas.
+- **Pacientes activos sigue midiendo sesiones**, no ventas: activo es el que
+  se sienta, no el que pagó hace seis meses y tiene saldo.
+- **El denominador del LTV son los compradores**, la misma población por la que
+  divide el CAC. Si uno contara compradores y el otro pacientes con sesión, el
+  cociente LTV/CAC compararía dos cosas distintas.
 
 ---
 

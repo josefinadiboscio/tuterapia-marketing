@@ -1,7 +1,6 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
 import {
   monthRangeUtc,
-  PRIMERA_SESION,
   PRIMER_PAGO,
   type DiasHistograma,
   type Pais,
@@ -9,8 +8,10 @@ import {
 
 /**
  * Conversión por cohorte de registro, with a FIXED 30-day window: of the
- * patients who registered in this month, how many had their first realized
- * session within 30 days of registering (METRICAS.md §6).
+ * patients who registered in this month, how many bought within 30 days.
+ *
+ * Measured on the sale, to match how a patient is counted as new. Converting
+ * and becoming new are then the same event seen from two sides.
  *
  * Fixed rather than open-ended so a closed month stops moving. The tail is
  * real — 6% convert after day 60 — which means the number understates
@@ -30,7 +31,7 @@ export async function conversionCohorte(
             SUM(f.primera IS NOT NULL
                 AND f.primera < DATE_ADD(l.creacion, INTERVAL 30 DAY)) AS convertidos
        FROM login l
-       LEFT JOIN (${PRIMERA_SESION}) f ON f.id_paciente = l.id
+       LEFT JOIN (${PRIMER_PAGO}) f ON f.id_paciente = l.id
       WHERE l.tipo = 1 AND l.paisDominio = ?
         AND l.creacion >= ? AND l.creacion < ?`,
     [pais, start, end],
@@ -45,9 +46,8 @@ export async function conversionCohorte(
  * Días entre registro y PRIMER PAGO CONFIRMADO, as a histogram over the
  * registration cohort of the month.
  *
- * On payment, not on first session: "mediana de compra" measures the purchase.
- * The percentile table in METRICAS.md §5 measures registro -> primera sesión,
- * which is a different curve and is what `curvaConversion` below returns.
+ * Same event the conversion counts, so the median is literally "how long the
+ * half that converts takes to convert".
  *
  * A histogram is the full distribution, so the median and p80 derived from it
  * are exact, and it works the same on MySQL 5.7 and 8.
@@ -74,13 +74,16 @@ export async function diasHastaPago(
 }
 
 /**
- * Maturity curve for projecting young cohorts: how days-to-first-session are
- * distributed across cohorts old enough to be finished (registered more than
- * 90 days ago).
+ * Maturity curve for projecting young cohorts: how days-to-first-purchase are
+ * distributed across cohorts old enough to be finished.
  *
- * Measured instead of hardcoded. The table in METRICAS.md §5 was a snapshot;
- * this recomputes it from the same data every run, so a shift in the curve
- * shows up instead of quietly biasing the projection.
+ * On the purchase, like the conversion it projects. This curve is much
+ * steeper than the registro-to-session one in METRICAS.md §5: the median buyer
+ * pays the same day they register, so a cohort is nearly closed within a
+ * couple of weeks.
+ *
+ * Measured instead of hardcoded, so a shift in the curve shows up rather than
+ * quietly biasing the projection.
  */
 export async function curvaConversion(
   conn: Connection,
@@ -92,7 +95,7 @@ export async function curvaConversion(
   >(
     `SELECT DATEDIFF(f.primera, l.creacion) AS dias, COUNT(*) AS n
        FROM login l
-       JOIN (${PRIMERA_SESION}) f ON f.id_paciente = l.id
+       JOIN (${PRIMER_PAGO}) f ON f.id_paciente = l.id
       WHERE l.tipo = 1 AND l.paisDominio = ?
         AND l.creacion >= ?
         AND l.creacion < DATE_SUB(NOW(), INTERVAL 90 DAY)

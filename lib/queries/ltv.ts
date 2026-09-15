@@ -1,5 +1,5 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
-import { monthRangeUtc, type Pais } from "./shared";
+import { monthRangeUtc, PRIMER_PAGO, type Pais } from "./shared";
 
 /**
  * The two factors of the LTV (METRICAS.md §4), kept apart on purpose: how many
@@ -13,13 +13,17 @@ import { monthRangeUtc, type Pais } from "./shared";
 
 /**
  * Sessions per patient over a CLOSED cohort: patients who registered in the
- * month, counting only sessions realized within 90 days of registering.
+ * month AND bought within 90 days, counting the sessions they realized in
+ * those same 90 days.
  *
- * Closed because an active patient has not finished their cycle yet, and
- * including them drags the average down. Patients with a single session are
- * counted — leaving them out is what inflated the old estimate (§9).
+ * The denominator is buyers, the same population CAC divides by, so LTV/CAC
+ * compares like with like. Patients with a single session are counted —
+ * leaving them out is what inflated the old estimate (§9).
  *
- * The caller is responsible for only asking about months older than 90 days.
+ * Closed at 90 days because an active patient has not finished their cycle,
+ * and because a lifetime count always reads higher on older cohorts simply
+ * for having had more time. The caller only asks about months older than 90
+ * days.
  */
 export async function sesionesPorPaciente(
   conn: Connection,
@@ -30,14 +34,20 @@ export async function sesionesPorPaciente(
   const [rows] = await conn.query<
     (RowDataPacket & { pacientes: number; sesiones: number })[]
   >(
-    `SELECT COUNT(DISTINCT l.id) AS pacientes, COUNT(*) AS sesiones
-       FROM login l
-       JOIN sesiones s
-         ON s.id_paciente = l.id
+    `SELECT COUNT(DISTINCT compradores.id) AS pacientes,
+            COUNT(s.id) AS sesiones
+       FROM (
+         SELECT l.id, l.creacion
+           FROM login l
+           JOIN (${PRIMER_PAGO}) p ON p.id_paciente = l.id
+          WHERE l.tipo = 1 AND l.paisDominio = ?
+            AND l.creacion >= ? AND l.creacion < ?
+            AND p.primera < DATE_ADD(l.creacion, INTERVAL 90 DAY)
+       ) compradores
+       LEFT JOIN sesiones s
+         ON s.id_paciente = compradores.id
         AND s.realizada = 1
-        AND s.fecha < DATE_ADD(l.creacion, INTERVAL 90 DAY)
-      WHERE l.tipo = 1 AND l.paisDominio = ?
-        AND l.creacion >= ? AND l.creacion < ?`,
+        AND s.fecha < DATE_ADD(compradores.creacion, INTERVAL 90 DAY)`,
     [pais, start, end],
   );
   return {

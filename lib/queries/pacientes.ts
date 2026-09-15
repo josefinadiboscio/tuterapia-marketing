@@ -1,11 +1,17 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
-import { monthRangeUtc, PRIMERA_SESION, type Pais } from "./shared";
+import { monthRangeUtc, PRIMER_PAGO, type Pais } from "./shared";
 
 /**
- * Pacientes nuevos: patients whose FIRST realized session falls in the month
- * (METRICAS.md §6). They belong to the month of the session, not of their
- * registration — a patient who signed up in March and started in May is new
- * in May.
+ * Pacientes nuevos: patients whose FIRST confirmed payment falls in the month.
+ * The sale is what makes a patient new, not the first session — someone who
+ * paid in August and sits down in September is new in August.
+ *
+ * They belong to the month of the sale, not of their registration: a patient
+ * who signed up in March and bought in May is new in May.
+ *
+ * Measured against the first realized session instead, the number is about 6%
+ * lower (576 vs 613 for AR in 2026-08): the gap is the patients who already
+ * paid but have not had their first session yet.
  */
 export async function pacientesNuevos(
   conn: Connection,
@@ -15,7 +21,7 @@ export async function pacientesNuevos(
   const { start, end } = monthRangeUtc(mes);
   const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
     `SELECT COUNT(*) AS n
-       FROM (${PRIMERA_SESION}) f
+       FROM (${PRIMER_PAGO}) f
        JOIN login l ON l.id = f.id_paciente AND l.tipo = 1
       WHERE l.paisDominio = ?
         AND f.primera >= ? AND f.primera < ?`,

@@ -65,7 +65,7 @@ function candidatosDeConexion(): { host: string; url: string }[] {
     return [{ host: new URL(explicita).hostname, url: explicita }];
   }
 
-  const password = process.env.SUPABASE_DB_PASSWORD?.trim();
+  const password = limpiar(process.env.SUPABASE_DB_PASSWORD);
   if (!password) return [];
   const ref = refDelProyecto();
 
@@ -109,6 +109,37 @@ function refDelProyecto(): string {
     return new URL(url).hostname.split(".")[0] || REF_POR_DEFECTO;
   }
   return REF_POR_DEFECTO;
+}
+
+/**
+ * Strips the wrapping that survives a copy-paste: surrounding whitespace and
+ * quotes. A quoted value fails authentication in a way that looks exactly
+ * like a wrong password.
+ */
+export function limpiar(value: string | undefined): string {
+  return (value ?? "").trim().replace(/^["'`]|["'`]$/g, "").trim();
+}
+
+/**
+ * Describes the configured password without revealing it, so a paste mistake
+ * can be diagnosed from the outside: length, character classes, and whether
+ * it arrived wrapped in quotes or padded with spaces.
+ */
+export function huellaDePassword(): Record<string, unknown> {
+  const crudo = process.env.SUPABASE_DB_PASSWORD;
+  if (crudo === undefined) return { definida: false };
+
+  const limpio = limpiar(crudo);
+  return {
+    definida: true,
+    largo_crudo: crudo.length,
+    largo_limpio: limpio.length,
+    tenia_espacios: crudo !== crudo.trim(),
+    tenia_comillas: /^["'`]|["'`]$/.test(crudo.trim()),
+    solo_alfanumerica: /^[a-zA-Z0-9]+$/.test(limpio),
+    empieza_con: limpio.slice(0, 1),
+    parece_una_url: limpio.startsWith("postgres"),
+  };
 }
 
 function esUrlValida(value: string): boolean {

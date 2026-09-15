@@ -3,6 +3,7 @@ import type { RowDataPacket } from "mysql2";
 import { withMysql } from "@/lib/mysql";
 import { isCronAuthorized } from "@/lib/auth";
 import { monthRangeUtc } from "@/lib/queries/shared";
+import { huellaDePassword } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,11 @@ export async function GET(request: Request) {
   }
 
   const params = new URL(request.url).searchParams;
+  // ?db=1 reports what the database password looks like, never what it is.
+  if (params.get("db") === "1") {
+    return NextResponse.json({ ok: true, password: huellaDePassword() });
+  }
+
   const mes = params.get("mes") ?? "2026-08";
   const pais = params.get("pais") ?? "AR";
 

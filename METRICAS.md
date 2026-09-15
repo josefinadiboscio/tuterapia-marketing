@@ -8,7 +8,8 @@ misma tabla de agregados — nunca se recalcula por separado.
 
 ## 1. Fuentes
 
-Base MySQL de solo lectura: `tuterapiaweb`, usuario dedicado con `SELECT`.
+Base de solo lectura: `tuterapiaweb`, usuario dedicado con `SELECT`. El motor
+es **MariaDB 10.6**, no MySQL — la sintaxis exclusiva de MySQL 8 no aplica.
 
 | Tabla | Qué aporta | Join |
 |---|---|---|
@@ -39,10 +40,15 @@ Base MySQL de solo lectura: `tuterapiaweb`, usuario dedicado con `SELECT`.
   fila, para no perder el índice.
 - **`login.active` no filtra.** Los 127.381 registros con `tipo = 1` tienen
   `active = 1`; solo se desactivan terapeutas.
-- **`pacientes.terminarRegistro` tampoco filtra.** 89.401 de 127.381 registros
-  lo tienen en 0. Sea cual sea el lado que marca, son registros igual: lo que
-  está en juego es tener o no terapeuta asignado, que es una etapa del funnel
-  a mostrar, no un motivo de exclusión.
+- **`pacientes.terminarRegistro` tampoco filtra, y marca al revés de lo que
+  sugiere el nombre.** `= 1` es "le falta terminar" (37.900 registros, 27.203
+  sin terapeuta) y `= 0` es registro completo (89.401, de los cuales 88.887
+  con terapeuta). No es un motivo de exclusión: son registros igual, lo que no
+  completaron es el funnel.
+- **Para "tiene terapeuta" se usa `pacientes.id_terapeuta IS NOT NULL`, no el
+  flag.** Los dos no coinciden: 10.697 pacientes tienen `terminarRegistro = 1`
+  y terapeuta asignado igual. Con la columna: 99.584 con terapeuta, 27.717
+  sin.
 
 ---
 

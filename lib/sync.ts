@@ -1,6 +1,12 @@
 import type { Connection } from "mysql2/promise";
 import type { Client } from "pg";
-import { PAISES, type Pais } from "@/lib/queries/shared";
+import {
+  PAISES,
+  monthRangeUtc,
+  rangoParcialUtc,
+  transcurridoEnMes,
+  type Pais,
+} from "@/lib/queries/shared";
 import { registros, registrosPorSource } from "@/lib/queries/registros";
 import { pacientesNuevos, pacientesActivos, churn } from "@/lib/queries/pacientes";
 import {
@@ -42,6 +48,18 @@ type Fila = {
   cohorte_cerrada: boolean;
   churn_rate: number | null;
   es_provisorio: boolean;
+  registros_tramo_previo: number | null;
+  pacientes_nuevos_tramo_previo: number | null;
+  pacientes_activos_tramo_previo: number | null;
+  tramo_dias: number | null;
+};
+
+/** The same stretch of the previous month, for a month still running. */
+type TramoPrevio = {
+  registros: number;
+  pacientes_nuevos: number;
+  pacientes_activos: number;
+  dias: number;
 };
 
 /**
@@ -70,9 +88,16 @@ export async function sincronizarMes(
   // rather than from the rounded per-country results.
   const crudos: Record<string, Awaited<ReturnType<typeof medirPais>>> = {};
 
+  const tramos: Record<string, TramoPrevio | null> = {};
+
   for (const pais of PAISES as readonly Pais[]) {
     const medido = await medirPais(mysql, mes, pais);
     crudos[pais] = medido;
+
+    const tramo = esProvisorio
+      ? await medirTramoPrevio(mysql, mes, pais)
+      : null;
+    tramos[pais] = tramo;
 
     filas.push(
       armarFila({
@@ -82,6 +107,7 @@ export async function sincronizarMes(
         medido,
         edad,
         esProvisorio,
+        tramo,
         gastoUsd: gastos[pais] ?? null,
         pctComision: parametros[`pct_comision:${pais}`] ?? null,
         tipoCambio: parametros[`tipo_cambio:${pais}`] ?? null,
@@ -100,7 +126,7 @@ export async function sincronizarMes(
     }
   }
 
-  filas.push(armarTotal(mes, crudos, edad, esProvisorio, gastos));
+  filas.push(armarTotal(mes, crudos, edad, esProvisorio, gastos, tramos));
 
   await transaction(db, async () => {
     for (const fila of filas) await upsert(db, fila);
@@ -110,6 +136,7 @@ export async function sincronizarMes(
 }
 
 async function medirPais(mysql: Connection, mes: string, pais: Pais) {
+  const rango = monthRangeUtc(mes);
   const [
     nRegistros,
     nuevos,
@@ -122,16 +149,16 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     precios,
     porSource,
   ] = await Promise.all([
-    registros(mysql, mes, pais),
-    pacientesNuevos(mysql, mes, pais),
-    pacientesActivos(mysql, mes, pais),
+    registros(mysql, rango, pais),
+    pacientesNuevos(mysql, rango, pais),
+    pacientesActivos(mysql, rango, pais),
     conversionCohorte(mysql, mes, pais),
     diasHastaPago(mysql, mes, pais),
     curvaConversion(mysql, pais),
     churn(mysql, mes, pais),
     sesionesPorPaciente(mysql, mes, pais),
     precioPorSesion(mysql, mes, pais),
-    registrosPorSource(mysql, mes, pais),
+    registrosPorSource(mysql, rango, pais),
   ]);
 
   return {
@@ -155,6 +182,7 @@ function armarFila({
   medido,
   edad,
   esProvisorio,
+  tramo,
   gastoUsd,
   pctComision,
   tipoCambio,
@@ -165,6 +193,7 @@ function armarFila({
   medido: Awaited<ReturnType<typeof medirPais>>;
   edad: number;
   esProvisorio: boolean;
+  tramo: TramoPrevio | null;
   gastoUsd: number | null;
   pctComision: number | null;
   tipoCambio: number | null;
@@ -204,7 +233,43 @@ function armarFila({
     cohorte_cerrada: cerrada,
     churn_rate: churnRate(medido.bajas.activos_mes_previo, medido.bajas.perdidos),
     es_provisorio: esProvisorio,
+    registros_tramo_previo: tramo?.registros ?? null,
+    pacientes_nuevos_tramo_previo: tramo?.pacientes_nuevos ?? null,
+    pacientes_activos_tramo_previo: tramo?.pacientes_activos ?? null,
+    tramo_dias: tramo?.dias ?? null,
   };
+}
+
+/**
+ * The same stretch of the previous month: its first N days, where N is how
+ * much of the current month has elapsed.
+ */
+async function medirTramoPrevio(
+  mysql: Connection,
+  mes: string,
+  pais: Pais,
+): Promise<TramoPrevio> {
+  const transcurrido = transcurridoEnMes(mes);
+  const rango = rangoParcialUtc(mesAnterior(mes), transcurrido);
+
+  const [reg, nuevos, activos] = await Promise.all([
+    registros(mysql, rango, pais),
+    pacientesNuevos(mysql, rango, pais),
+    pacientesActivos(mysql, rango, pais),
+  ]);
+
+  return {
+    registros: reg,
+    pacientes_nuevos: nuevos,
+    pacientes_activos: activos,
+    dias: Math.floor(transcurrido / 86_400_000),
+  };
+}
+
+function mesAnterior(mes: string): string {
+  const [year, month] = mes.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 /**
@@ -217,6 +282,7 @@ function armarTotal(
   edad: number,
   esProvisorio: boolean,
   gastos: Record<string, number>,
+  tramos: Record<string, TramoPrevio | null>,
 ): Fila {
   const paises = Object.values(crudos);
   const suma = (fn: (m: (typeof paises)[number]) => number) =>
@@ -258,7 +324,23 @@ function armarTotal(
     cohorte_cerrada: cerrada,
     churn_rate: churnRate(activosPrevio, perdidos),
     es_provisorio: esProvisorio,
+    registros_tramo_previo: sumaTramo(tramos, (t) => t.registros),
+    pacientes_nuevos_tramo_previo: sumaTramo(tramos, (t) => t.pacientes_nuevos),
+    pacientes_activos_tramo_previo: sumaTramo(
+      tramos,
+      (t) => t.pacientes_activos,
+    ),
+    tramo_dias: Object.values(tramos).find((t) => t)?.dias ?? null,
   };
+}
+
+function sumaTramo(
+  tramos: Record<string, TramoPrevio | null>,
+  fn: (t: TramoPrevio) => number,
+): number | null {
+  const presentes = Object.values(tramos).filter((t): t is TramoPrevio => !!t);
+  if (presentes.length === 0) return null;
+  return presentes.reduce((acc, t) => acc + fn(t), 0);
 }
 
 function consolidar(hist: { dias: number; n: number }[]) {
@@ -337,6 +419,10 @@ function filaVacia(
     cohorte_cerrada: false,
     churn_rate: null,
     es_provisorio: esProvisorio,
+    registros_tramo_previo: null,
+    pacientes_nuevos_tramo_previo: null,
+    pacientes_activos_tramo_previo: null,
+    tramo_dias: null,
   };
 }
 
@@ -347,10 +433,12 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        conversion_cohorte, conversion_proyectada, cohorte_edad_dias,
        mediana_dias_compra, p80_dias_compra, gasto_usd, cac_usd,
        sesiones_por_paciente, margen_usd_sesion, ltv_usd, cohorte_cerrada,
-       churn_rate, es_provisorio, actualizado_en
+       churn_rate, es_provisorio, registros_tramo_previo,
+       pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
+       tramo_dias, actualizado_en
      ) values (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-       $17, $18, $19, now()
+       $17, $18, $19, $20, $21, $22, $23, now()
      )
      on conflict (mes, pais, plataforma) do update set
        registros = excluded.registros,
@@ -369,6 +457,10 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        cohorte_cerrada = excluded.cohorte_cerrada,
        churn_rate = excluded.churn_rate,
        es_provisorio = excluded.es_provisorio,
+       registros_tramo_previo = excluded.registros_tramo_previo,
+       pacientes_nuevos_tramo_previo = excluded.pacientes_nuevos_tramo_previo,
+       pacientes_activos_tramo_previo = excluded.pacientes_activos_tramo_previo,
+       tramo_dias = excluded.tramo_dias,
        actualizado_en = now()`,
     [
       `${fila.mes}-01`,
@@ -390,6 +482,10 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
       fila.cohorte_cerrada,
       fila.churn_rate,
       fila.es_provisorio,
+      fila.registros_tramo_previo,
+      fila.pacientes_nuevos_tramo_previo,
+      fila.pacientes_activos_tramo_previo,
+      fila.tramo_dias,
     ],
   );
 }

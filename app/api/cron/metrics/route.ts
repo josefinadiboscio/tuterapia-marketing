@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withMysql } from "@/lib/mysql";
 import { isCronAuthorized } from "@/lib/auth";
-import { PAISES, type Pais } from "@/lib/queries/shared";
+import { PAISES, monthRangeUtc, type Pais } from "@/lib/queries/shared";
 import { registros, registrosPorSource } from "@/lib/queries/registros";
 import {
   pacientesNuevos,
@@ -51,6 +51,8 @@ export async function GET(request: Request) {
     const porPais = await withMysql(async (conn) => {
       const out: Record<string, unknown> = {};
 
+      const rango = monthRangeUtc(mes);
+
       for (const pais of PAISES as readonly Pais[]) {
         const [
           nRegistros,
@@ -63,9 +65,9 @@ export async function GET(request: Request) {
           porPaciente,
           precios,
         ] = await Promise.all([
-            registros(conn, mes, pais),
-            pacientesNuevos(conn, mes, pais),
-            pacientesActivos(conn, mes, pais),
+            registros(conn, rango, pais),
+            pacientesNuevos(conn, rango, pais),
+            pacientesActivos(conn, rango, pais),
             conversionCohorte(conn, mes, pais),
             diasHastaPago(conn, mes, pais),
             curvaConversion(conn, pais),
@@ -114,7 +116,7 @@ export async function GET(request: Request) {
         await Promise.all(
           (PAISES as readonly Pais[]).map(async (pais) => [
             pais,
-            await registrosPorSource(conn, mes, pais),
+            await registrosPorSource(conn, monthRangeUtc(mes), pais),
           ]),
         ),
       );

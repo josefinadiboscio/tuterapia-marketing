@@ -214,8 +214,15 @@ el que muestra el tablero, no peor.
 
 - **Todo separado AR / UY.** Activación ~8–9% contra ~16–17%, duraciones y
   monedas distintas. El "Total" es una tercera opción, nunca el default.
-- **Meses en curso se marcan `es_provisorio`** y no llevan delta. Comparar un
-  mes a medio andar contra uno completo pinta todo en rojo.
+- **Meses en curso se marcan `es_provisorio`** y comparan contra **el mismo
+  tramo del mes anterior**: los primeros N días contra los primeros N días,
+  con N igual a lo transcurrido. Comparar un mes a medio andar contra uno
+  completo pinta todo en rojo sin motivo. El tramo lo mide y lo guarda el job,
+  no la UI.
+- **El tramo solo aplica a los conteos de volumen** (registros, pacientes
+  nuevos, pacientes activos). Conversión y mediana de compra siguen sin delta
+  en un mes en curso: son tasas sobre una cohorte joven, ya vienen proyectadas
+  y superponerles una comparación esconde eso.
 - **El job nunca recalcula meses cerrados.** Escribe solo el mes en curso y el
   anterior. Recalcular hacia atrás es un comando explícito, no un efecto del
   cron.

@@ -1,5 +1,5 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
-import { monthRangeUtc, type Pais } from "./shared";
+import { monthRangeUtc, type Pais, type Rango } from "./shared";
 
 /**
  * Registros: rows in `login` with tipo = 1, by month of `creacion`
@@ -10,10 +10,10 @@ import { monthRangeUtc, type Pais } from "./shared";
  */
 export async function registros(
   conn: Connection,
-  mes: string,
+  rango: Rango,
   pais: Pais,
 ): Promise<number> {
-  const { start, end } = monthRangeUtc(mes);
+  const { start, end } = rango;
   const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
     `SELECT COUNT(*) AS n
        FROM login
@@ -34,10 +34,10 @@ export async function registros(
  */
 export async function registrosPorSource(
   conn: Connection,
-  mes: string,
+  rango: Rango,
   pais: Pais,
 ): Promise<{ utm_source: string; n: number }[]> {
-  const { start, end } = monthRangeUtc(mes);
+  const { start, end } = rango;
   const [rows] = await conn.query<
     (RowDataPacket & { utm_source: string; n: number })[]
   >(

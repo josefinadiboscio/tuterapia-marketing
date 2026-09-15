@@ -14,6 +14,10 @@ export type Metricas = {
   mediana_dias_compra: number | null;
   p80_dias_compra: number | null;
   es_provisorio: boolean;
+  registros_tramo_previo: number | null;
+  pacientes_nuevos_tramo_previo: number | null;
+  pacientes_activos_tramo_previo: number | null;
+  tramo_dias: number | null;
 };
 
 export type Vista = {
@@ -50,7 +54,9 @@ export async function leerVista(pais: string, mes?: string): Promise<Vista> {
       `select to_char(mes, 'YYYY-MM') as mes, pais, plataforma, registros,
               pacientes_nuevos, pacientes_activos, conversion_cohorte,
               conversion_proyectada, cohorte_edad_dias, mediana_dias_compra,
-              p80_dias_compra, es_provisorio
+              p80_dias_compra, es_provisorio, registros_tramo_previo,
+              pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
+              tramo_dias
          from marketing.metricas_mensuales
         where pais = $1 and plataforma = 'TODAS'
           and to_char(mes, 'YYYY-MM') in ($2, $3)`,

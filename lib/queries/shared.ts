@@ -13,13 +13,41 @@ export const LOCAL_UTC_OFFSET_HOURS = 3;
 export const PAISES = ["AR", "UY"] as const;
 export type Pais = (typeof PAISES)[number];
 
-/** Half-open UTC range [start, end) for a local month given as 'YYYY-MM'. */
-export function monthRangeUtc(mes: string): { start: string; end: string } {
+/** A half-open [start, end) window in UTC, as MySQL datetimes. */
+export type Rango = { start: string; end: string };
+
+/** Half-open UTC range for a local month given as 'YYYY-MM'. */
+export function monthRangeUtc(mes: string): Rango {
   const [year, month] = mes.split("-").map(Number);
   return {
-    start: toSqlDatetime(Date.UTC(year, month - 1, 1, LOCAL_UTC_OFFSET_HOURS)),
+    start: toSqlDatetime(inicioDeMes(mes)),
     end: toSqlDatetime(Date.UTC(year, month, 1, LOCAL_UTC_OFFSET_HOURS)),
   };
+}
+
+/**
+ * The first `ms` milliseconds of a month.
+ *
+ * A month still running is compared against the same stretch of the previous
+ * one — fifteen days against fifteen days — because half a month against a
+ * whole one reads as a collapse that is not there. Clamped to the month's end
+ * so a 31-day stretch does not spill past a shorter month.
+ */
+export function rangoParcialUtc(mes: string, ms: number): Rango {
+  const completo = monthRangeUtc(mes);
+  const inicio = inicioDeMes(mes);
+  const fin = Math.min(inicio + ms, new Date(`${completo.end}Z`).getTime());
+  return { start: completo.start, end: toSqlDatetime(fin) };
+}
+
+/** Milliseconds elapsed in a month at a given instant, never negative. */
+export function transcurridoEnMes(mes: string, ahora = new Date()): number {
+  return Math.max(0, ahora.getTime() - inicioDeMes(mes));
+}
+
+function inicioDeMes(mes: string): number {
+  const [year, month] = mes.split("-").map(Number);
+  return Date.UTC(year, month - 1, 1, LOCAL_UTC_OFFSET_HOURS);
 }
 
 function toSqlDatetime(epochMs: number): string {

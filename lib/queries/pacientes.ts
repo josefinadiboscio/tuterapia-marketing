@@ -1,5 +1,5 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
-import { monthRangeUtc, PRIMER_PAGO, type Pais } from "./shared";
+import { monthRangeUtc, PRIMER_PAGO, type Pais, type Rango } from "./shared";
 
 /**
  * Pacientes nuevos: patients whose FIRST confirmed payment falls in the month.
@@ -15,10 +15,10 @@ import { monthRangeUtc, PRIMER_PAGO, type Pais } from "./shared";
  */
 export async function pacientesNuevos(
   conn: Connection,
-  mes: string,
+  rango: Rango,
   pais: Pais,
 ): Promise<number> {
-  const { start, end } = monthRangeUtc(mes);
+  const { start, end } = rango;
   const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
     `SELECT COUNT(*) AS n
        FROM (${PRIMER_PAGO}) f
@@ -33,10 +33,10 @@ export async function pacientesNuevos(
 /** Pacientes activos: at least one realized session in the month. */
 export async function pacientesActivos(
   conn: Connection,
-  mes: string,
+  rango: Rango,
   pais: Pais,
 ): Promise<number> {
-  const { start, end } = monthRangeUtc(mes);
+  const { start, end } = rango;
   const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
     `SELECT COUNT(DISTINCT s.id_paciente) AS n
        FROM sesiones s

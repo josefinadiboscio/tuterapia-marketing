@@ -79,7 +79,9 @@ export default async function General({
         <>
           {actual.es_provisorio ? (
             <p className="mt-5 inline-block rounded-md bg-amber-50 px-3 py-1 text-sm text-amber-900">
-              Mes en curso · provisorio, sin comparación contra el mes anterior
+              Mes en curso · provisorio. Los deltas comparan los primeros{" "}
+              {actual.tramo_dias ?? 0} días contra el mismo tramo del mes
+              anterior.
             </p>
           ) : null}
 
@@ -87,19 +89,37 @@ export default async function General({
             <Tarjeta
               titulo="Registros"
               valor={formatearEntero(actual.registros)}
-              delta={delta(actual, previo, (m) => m.registros)}
+              delta={delta(
+                actual,
+                previo,
+                (m) => m.registros,
+                actual.registros_tramo_previo,
+              )}
+              contraTramo={actual.es_provisorio}
             />
             <Tarjeta
               titulo="Pacientes nuevos"
               valor={formatearEntero(actual.pacientes_nuevos)}
               nota="primer pago confirmado"
-              delta={delta(actual, previo, (m) => m.pacientes_nuevos)}
+              delta={delta(
+                actual,
+                previo,
+                (m) => m.pacientes_nuevos,
+                actual.pacientes_nuevos_tramo_previo,
+              )}
+              contraTramo={actual.es_provisorio}
             />
             <Tarjeta
               titulo="Pacientes activos"
               valor={formatearEntero(actual.pacientes_activos)}
               nota="con sesión en el mes"
-              delta={delta(actual, previo, (m) => m.pacientes_activos)}
+              delta={delta(
+                actual,
+                previo,
+                (m) => m.pacientes_activos,
+                actual.pacientes_activos_tramo_previo,
+              )}
+              contraTramo={actual.es_provisorio}
             />
             <Tarjeta
               titulo="Conversión"
@@ -109,10 +129,13 @@ export default async function General({
                   ? `proyectada · cohorte de ${actual.cohorte_edad_dias} días`
                   : "ventana de 30 días"
               }
+              // Conversion and the purchase median keep no delta on a month
+              // still running: a rate over a young cohort is already being
+              // projected, and stacking a comparison on top hides that.
               delta={
-                actual.conversion_proyectada
+                actual.conversion_proyectada || actual.es_provisorio
                   ? null
-                  : delta(actual, previo, (m) => m.conversion_cohorte)
+                  : delta(actual, previo, (m) => m.conversion_cohorte, null)
               }
             />
             <Tarjeta
@@ -166,11 +189,13 @@ function Tarjeta({
   valor,
   nota,
   delta,
+  contraTramo = false,
 }: {
   titulo: string;
   valor: string;
   nota?: string;
   delta: number | null;
+  contraTramo?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 p-4">
@@ -183,7 +208,8 @@ function Tarjeta({
           }`}
         >
           {delta >= 0 ? "+" : ""}
-          {(delta * 100).toFixed(1)}% vs mes anterior
+          {(delta * 100).toFixed(1)}%{" "}
+          {contraTramo ? "vs mismo tramo" : "vs mes anterior"}
         </p>
       ) : null}
       {nota ? <p className="mt-1 text-xs text-slate-400">{nota}</p> : null}
@@ -191,16 +217,23 @@ function Tarjeta({
   );
 }
 
-/** No delta for a month still running: half a month against a whole one paints everything red. */
+/**
+ * A closed month compares against the whole previous month. A month still
+ * running compares against the same stretch of it — the first N days against
+ * the first N days — which the job measured and stored. Comparing half a
+ * month against a whole one paints everything red for no reason.
+ */
 function delta(
   actual: Metricas,
   previo: Metricas | null,
   campo: (m: Metricas) => number | null,
+  tramoPrevio: number | null,
 ): number | null {
-  if (actual.es_provisorio || !previo) return null;
   const a = campo(actual);
-  const b = campo(previo);
-  if (a === null || b === null || b === 0) return null;
+  if (a === null) return null;
+
+  const b = actual.es_provisorio ? tramoPrevio : previo && campo(previo);
+  if (b === null || b === undefined || b === 0) return null;
   return (a - b) / b;
 }
 

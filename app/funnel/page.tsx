@@ -48,6 +48,13 @@ export default async function Funnel({
 
             <Embudo etapas={vista.etapas} />
 
+            <a
+              href={`/api/funnel/csv?pais=${ctx.pais}&mes=${vista.mes}`}
+              className="mt-4 inline-block rounded-md border border-borde px-2.5 py-1 text-xs text-sec hover:border-sec hover:text-texto"
+            >
+              Descargar cohorte {vista.mes} · {ctx.pais} (CSV)
+            </a>
+
             <section className="mt-10 grid gap-[10px] md:grid-cols-4">
               <Card
                 titulo="Mediana de compra"

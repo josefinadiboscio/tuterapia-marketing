@@ -35,6 +35,7 @@ import {
   pacientesActivosPorSource,
   conversionPorSource,
   cohorteSesiones,
+  compradoresDeCohorte,
 } from "@/lib/queries/por-source";
 import { resolverPlataforma, SIN_MAPEAR, type UtmMapping } from "@/lib/utm";
 import { transaction } from "@/lib/db";
@@ -177,24 +178,26 @@ export async function sincronizarMes(
       nro: p.nro,
       pacientes: p.pacientes,
       cohorteN: c.cohorteN,
+      compraron: crudos[pais]?.compradores ?? 0,
     }));
   });
 
-  const total = sesionesCohorte.reduce<Record<number, { p: number; n: number }>>(
-    (acc, f) => {
-      const a = (acc[f.nro] ??= { p: 0, n: 0 });
-      a.p += f.pacientes;
-      a.n += f.cohorteN;
-      return acc;
-    },
-    {},
-  );
+  const total = sesionesCohorte.reduce<
+    Record<number, { p: number; n: number; c: number }>
+  >((acc, f) => {
+    const a = (acc[f.nro] ??= { p: 0, n: 0, c: 0 });
+    a.p += f.pacientes;
+    a.n += f.cohorteN;
+    a.c += f.compraron;
+    return acc;
+  }, {});
   for (const [nro, v] of Object.entries(total)) {
     sesionesCohorte.push({
       pais: "TOTAL",
       nro: Number(nro),
       pacientes: v.p,
       cohorteN: v.n,
+      compraron: v.c,
     });
   }
 
@@ -244,13 +247,14 @@ export async function sincronizarMes(
     for (const f of sesionesCohorte) {
       await db.query(
         `insert into marketing.cohorte_sesiones
-           (cohorte, pais, nro_sesion, pacientes, cohorte_n)
-         values ($1, $2, $3, $4, $5)
+           (cohorte, pais, nro_sesion, pacientes, cohorte_n, cohorte_compraron)
+         values ($1, $2, $3, $4, $5, $6)
          on conflict (cohorte, pais, nro_sesion) do update set
            pacientes = excluded.pacientes,
            cohorte_n = excluded.cohorte_n,
+           cohorte_compraron = excluded.cohorte_compraron,
            actualizado_en = now()`,
-        [`${mes}-01`, f.pais, f.nro, f.pacientes, f.cohorteN],
+        [`${mes}-01`, f.pais, f.nro, f.pacientes, f.cohorteN, f.compraron],
       );
     }
 
@@ -290,6 +294,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     activosPorSource,
     conversionSource,
     cohorteSes,
+    compradores,
   ] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
@@ -306,6 +311,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     pacientesActivosPorSource(mysql, mes, pais),
     conversionPorSource(mysql, mes, pais),
     cohorteSesiones(mysql, mes, pais),
+    compradoresDeCohorte(mysql, mes, pais),
   ]);
 
   return {
@@ -324,6 +330,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     activosPorSource,
     conversionSource,
     cohorteSes,
+    compradores,
   };
 }
 

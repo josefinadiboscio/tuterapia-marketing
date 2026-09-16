@@ -81,19 +81,22 @@ export async function leerFunnel(
     const [mensual, sesiones, grillaRaw] = await Promise.all([
       db.query<{
         registros: number;
-        conversion_cohorte: string | null;
         mediana_dias_compra: string | null;
         p80_dias_compra: string | null;
       }>(
-        `select registros, conversion_cohorte::text, mediana_dias_compra::text,
-                p80_dias_compra::text
+        `select registros, mediana_dias_compra::text, p80_dias_compra::text
            from marketing.metricas_mensuales
           where pais = $1 and plataforma = 'TODAS'
             and to_char(mes, 'YYYY-MM') = $2`,
         [pais, elegido],
       ),
-      db.query<{ nro_sesion: number; pacientes: number; cohorte_n: number }>(
-        `select nro_sesion, pacientes, cohorte_n
+      db.query<{
+        nro_sesion: number;
+        pacientes: number;
+        cohorte_n: number;
+        cohorte_compraron: number | null;
+      }>(
+        `select nro_sesion, pacientes, cohorte_n, cohorte_compraron
            from marketing.cohorte_sesiones
           where pais = $1 and to_char(cohorte, 'YYYY-MM') = $2
           order by nro_sesion`,
@@ -119,15 +122,12 @@ export async function leerFunnel(
 
     const fila = mensual.rows[0];
     const registros = fila?.registros ?? null;
-    const conversion =
-      fila?.conversion_cohorte == null ? null : Number(fila.conversion_cohorte);
 
-    // Of the people who registered this month, how many bought. That is the
-    // cohort conversion, which is exactly the stage this funnel needs.
-    const compraron =
-      registros !== null && conversion !== null
-        ? Math.round(registros * conversion)
-        : null;
+    // Of the people who registered this month, how many ever bought — no
+    // window. conversion_cohorte stops at thirty days, and the session stages
+    // below have no clock at all, so using it here drew a first session larger
+    // than the purchase above it.
+    const compraron = sesiones.rows[0]?.cohorte_compraron ?? null;
 
     const edad = edadDeCohorte(elegido);
     const porSesion = new Map(sesiones.rows.map((r) => [r.nro_sesion, r.pacientes]));

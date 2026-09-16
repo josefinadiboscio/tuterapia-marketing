@@ -201,6 +201,33 @@ export async function conversionPorDiaYSource(
 }
 
 /**
+ * How many of a registration cohort ever bought, with no window.
+ *
+ * Different from conversion_cohorte on purpose. That one asks how many bought
+ * within thirty days, which is a question about speed and belongs on General.
+ * The funnel asks how far the cohort got, with no clock: someone who signed up
+ * in April and paid in July is a buyer who reached a first session, and
+ * counting them at the session stage but not at the purchase stage drew a
+ * funnel whose second stage was larger than its first.
+ */
+export async function compradoresDeCohorte(
+  conn: Connection,
+  mes: string,
+  pais: Pais,
+): Promise<number> {
+  const { start, end } = monthRangeUtc(mes);
+  const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
+    `SELECT COUNT(*) AS n
+       FROM login l
+       JOIN (${PRIMER_PAGO}) p ON p.id_paciente = l.id
+      WHERE l.tipo = 1 AND l.paisDominio = ?
+        AND l.creacion >= ? AND l.creacion < ?`,
+    [pais, start, end],
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/**
  * How many patients of a registration cohort reached their nth realized
  * session, counted to 12.
  *

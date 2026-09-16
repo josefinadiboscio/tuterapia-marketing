@@ -36,11 +36,19 @@ export async function leerAds(
   semana?: string,
 ): Promise<VistaAds> {
   return withDb(async (db) => {
-    const { rows: semanas } = await db.query<{ semana: string }>(
-      `select distinct semana::text from marketing.gastos order by semana desc limit 26`,
+    const { rows: semanas } = await db.query<{ semana: string; cerrada: boolean }>(
+      // A week still in progress already has its spend loaded but only part of
+      // its registrations, so every ratio in it reads low. The default lands on
+      // the last week the daily grain covers end to end; the rest stay pickable.
+      `select semana::text,
+              (semana + 6 <= (select max(fecha) from marketing.metricas_diarias)) as cerrada
+         from marketing.gastos group by semana order by semana desc limit 26`,
     );
     const disponibles = semanas.map((s) => s.semana);
-    const elegida = semana && disponibles.includes(semana) ? semana : disponibles[0] ?? null;
+    const ultimaCerrada = semanas.find((s) => s.cerrada)?.semana;
+    const elegida = semana && disponibles.includes(semana)
+      ? semana
+      : ultimaCerrada ?? disponibles[0] ?? null;
     if (!elegida) {
       return { semanas: [], semana: null, filas: [], totalGasto: 0, totalRegistros: null };
     }

@@ -104,7 +104,7 @@ export default async function General({
 
   return (
     <>
-      <Nav activa="/general" ctx={ctx} ultimaSync={vista.ultimaSync} />
+      <Nav activa="/general" ctx={ctx} />
       <Selectores activa="/general" ctx={ctx} conRango extra={extra} />
 
       <main className="mx-auto max-w-6xl px-6 pb-8 pt-6">

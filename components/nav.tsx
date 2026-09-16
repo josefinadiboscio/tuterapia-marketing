@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { fechaHora } from "@/lib/ui/format";
 import { ToggleTema } from "@/components/tema";
 import { RecordarPais } from "@/components/recordar-pais";
-import { RANGOS, type Rango } from "@/lib/dashboard";
+import { RANGOS, leerUltimaSync, type Rango } from "@/lib/dashboard";
 import { identidadDe } from "@/components/identidad";
 
 /**
@@ -53,15 +53,15 @@ export function conContexto(
   return `${href}?${query}`;
 }
 
-export function Nav({
+export async function Nav({
   activa,
   ctx,
-  ultimaSync,
 }: {
   activa: string;
   ctx: Contexto;
-  ultimaSync?: { corrida_en: string; error: string | null } | null;
 }) {
+  const ultimaSync = await leerUltimaSync();
+
   return (
     <header className="border-b border-borde">
       <RecordarPais pais={ctx.pais} />
@@ -123,7 +123,7 @@ export function Selectores({
             href={conContexto(activa, { ...ctx, pais: p }, extra)}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-xs ${
               p === ctx.pais
-                ? "bg-navy text-bg"
+                ? "bg-surface-2 text-texto"
                 : "bg-transparent text-sec hover:text-texto"
             }`}
           >
@@ -147,7 +147,7 @@ export function Selectores({
               href={conContexto(activa, { ...ctx, rango: r }, extra)}
               className={`px-2.5 py-1 text-xs ${
                 r === ctx.rango
-                  ? "bg-navy text-bg"
+                  ? "bg-surface-2 text-texto"
                   : "bg-transparent text-sec hover:text-texto"
               }`}
             >

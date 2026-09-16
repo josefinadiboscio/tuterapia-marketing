@@ -9,6 +9,7 @@ import {
   TONO,
   MUESTRA_MINIMA,
 } from "@/lib/veredicto";
+import { Chispa } from "@/components/chispa";
 import { entero, usd, porcentaje, fecha, SIN_DATO } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +85,7 @@ export default async function Ads({
                   <th className="pb-2 text-right font-normal">Registros</th>
                   <th className="pb-2 text-right font-normal">Conversión</th>
                   <th className="pb-2 text-right font-normal">CAC</th>
-                  <th className="pb-2 text-right font-normal">Ratio</th>
+                  <th className="pb-2 text-right font-normal">Ratio 6 sem.</th>
                   <th className="pb-2 text-right font-normal">Decisión</th>
                 </tr>
               </thead>
@@ -102,11 +103,18 @@ export default async function Ads({
                     <td className="py-2 text-right">{porcentaje(f.conversion)}</td>
                     <td className="py-2 text-right">{usd(f.cac, 1)}</td>
                     <td className="py-2 text-right">
-                      {f.ratio === null ? SIN_DATO : f.ratio.toFixed(2)}
+                      <span className="inline-flex items-center gap-2">
+                        <Chispa valores={f.historia} />
+                        <span className="w-9 text-right">
+                          {f.ratio === null ? SIN_DATO : f.ratio.toFixed(2)}
+                        </span>
+                      </span>
                     </td>
                     <td className={`py-2 text-right ${TONO[f.veredicto]}`}>
                       {ETIQUETAS[f.veredicto]}
-                      {f.veredicto === "sin_dato" && f.registros !== null ? (
+                      {f.veredicto === "sin_dato" &&
+                      f.registros !== null &&
+                      faltanRegistros(f.registros) > 0 ? (
                         <div className="text-xs text-ter">
                           faltan {entero(faltanRegistros(f.registros))} registros
                         </div>

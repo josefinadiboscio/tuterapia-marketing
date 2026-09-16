@@ -1,4 +1,5 @@
 import { withDb } from "@/lib/db";
+import { PAISES_REALES } from "@/lib/dashboard";
 
 /**
  * Daily composition by platform for the middle chart of General.
@@ -23,12 +24,15 @@ export async function leerDiarioPorPlataforma(
       plataforma: string;
       registros: number;
     }>(
-      `select fecha::text, plataforma, registros
+      // The daily table only breaks platform down per country: there is no
+      // TOTAL row per platform, so TOTAL adds the countries here.
+      `select fecha::text, plataforma, sum(registros)::int as registros
          from marketing.metricas_diarias
-        where pais = $1 and plataforma <> 'TODAS' and registros is not null
+        where pais = any($1) and plataforma <> 'TODAS' and registros is not null
           and fecha > (select coalesce(max(fecha), current_date) from marketing.metricas_diarias) - $2::int
+        group by fecha, plataforma
         order by fecha`,
-      [pais, dias],
+      [pais === "TOTAL" ? PAISES_REALES : [pais], dias],
     );
 
     const totales = new Map<string, number>();

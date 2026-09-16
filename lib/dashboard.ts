@@ -110,6 +110,26 @@ export async function leerGeneral(
   });
 }
 
+/**
+ * The last sync, on its own, for the header.
+ *
+ * Every screen shows the stamp, so every screen needs it: leaving it to the
+ * one reader that happened to return it left four tabs claiming there had
+ * never been a sync.
+ */
+export async function leerUltimaSync(): Promise<{
+  corrida_en: string;
+  error: string | null;
+} | null> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ corrida_en: string; error: string | null }>(
+      `select corrida_en, error from marketing.sync_log
+        order by corrida_en desc limit 1`,
+    );
+    return rows[0] ?? null;
+  });
+}
+
 /** Postgres numerics arrive as strings; nulls have to survive the trip. */
 function normalizar(fila: Record<string, unknown>): MesSerie {
   const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));

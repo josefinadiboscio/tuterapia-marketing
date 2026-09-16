@@ -18,6 +18,45 @@ export const maxDuration = 60;
  * Temporary: delete once the queries are validated against Looker.
  */
 const PROBES: Record<string, string> = {
+  // The dashboard says 58 new patients on 7 Sep across both countries; Looker
+  // says 53. The two halves add up internally (AR 44 + UY 14), so the gap is a
+  // definition, not a sum. Each column is one candidate, on the same day:
+  // whether the day is cut in local time or UTC, whether Chile is in, whether
+  // unconfirmed payments count, and whether therapists are excluded.
+  nuevos_7sep_definiciones: `
+    SELECT
+      SUM(l.paisDominio IN ('AR','UY')
+          AND DATE(DATE_SUB(pp.primera, INTERVAL 3 HOUR)) = '2026-09-07')
+        AS local_ar_uy,
+      SUM(l.paisDominio IN ('AR','UY')
+          AND DATE(pp.primera) = '2026-09-07')
+        AS utc_ar_uy,
+      SUM(DATE(DATE_SUB(pp.primera, INTERVAL 3 HOUR)) = '2026-09-07')
+        AS local_todos_los_paises,
+      SUM(l.paisDominio = 'CL'
+          AND DATE(DATE_SUB(pp.primera, INTERVAL 3 HOUR)) = '2026-09-07')
+        AS local_solo_cl,
+      SUM(l.paisDominio IN ('AR','UY')
+          AND DATE(DATE_SUB(pp.primera, INTERVAL 3 HOUR)) = '2026-09-07'
+          AND p.terminarRegistro = 1)
+        AS local_ar_uy_registro_terminado
+      FROM login l
+      JOIN (SELECT id_paciente, MIN(creacion) AS primera
+              FROM pacientes_pagos WHERE confirmado = 1
+             GROUP BY id_paciente) pp ON pp.id_paciente = l.id
+      LEFT JOIN pacientes p ON p.id_login = l.id
+     WHERE l.tipo = 1`,
+
+  // Same day counted with every confirmado value, in case Looker is not
+  // filtering on it.
+  nuevos_7sep_confirmado: `
+    SELECT pp.confirmado, COUNT(DISTINCT pp.id_paciente) AS pacientes
+      FROM pacientes_pagos pp
+      JOIN login l ON l.id = pp.id_paciente AND l.tipo = 1
+     WHERE l.paisDominio IN ('AR','UY')
+       AND DATE(DATE_SUB(pp.creacion, INTERVAL 3 HOUR)) = '2026-09-07'
+     GROUP BY pp.confirmado`,
+
   // Does terminarRegistro = 0 mean "no therapist yet"? Decides how the funnel
   // stage is modelled, and the user's recollection points the other way.
   terapeuta_vs_registro: `

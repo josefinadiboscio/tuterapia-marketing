@@ -92,6 +92,7 @@ const ECONOMIA = [
     id: "ltv",
     nombre: "LTV",
     campo: (m: MesSerie) => m.ltv_usd,
+    multiplicador: true,
     formato: (n: number | null) => usd(n, 1),
     formatoId: "usd" as const,
     unidad: "pct" as const,
@@ -209,6 +210,13 @@ type Metrica = {
   formato: (n: number | null) => string;
   /** The same format, as a name: a function cannot cross into the chart. */
   formatoId: FormatoId;
+  /**
+   * Show the sessions per patient under the number. LTV is that multiplier
+   * times the margin a session leaves, and the two move for different
+   * reasons: the price changing is not the same news as patients coming back
+   * more often, and the product alone cannot tell them apart.
+   */
+  multiplicador?: boolean;
   unidad: "pct" | "pp";
   definicion: string;
 };
@@ -400,6 +408,9 @@ function Card({
             serie={porPais[0]!.serie.filter((m) => !m.es_provisorio)}
             metrica={metrica}
           />
+          {metrica.multiplicador ? (
+            <Multiplicador serie={porPais[0]!.serie} />
+          ) : null}
         </>
       ) : (
         <>
@@ -407,9 +418,53 @@ function Card({
             {metrica.formato(ultimoValor(serie, metrica.campo))}
           </p>
           <DeltaCard ultimo={ultimo} cerrados={cerrados} metrica={metrica} />
+          {metrica.multiplicador ? <Multiplicador serie={serie} /> : null}
         </>
       )}
     </Link>
+  );
+}
+
+/**
+ * The other half of the LTV: how many sessions an average patient of the
+ * cohort does, and which way it is going.
+ *
+ * LTV is this number times the margin a session leaves. Shown on its own
+ * because the two move for different reasons — a price change is not the same
+ * news as patients coming back more often — and the product alone cannot tell
+ * which one moved.
+ *
+ * Reads the last month that HAS a value, the same one the LTV above it is
+ * showing: both are null until the cohort closes at ninety days.
+ */
+function Multiplicador({ serie }: { serie: MesSerie[] }) {
+  const valor = ultimoValor(serie, (m) => m.sesiones_por_paciente);
+  if (valor === null) return null;
+
+  const t = tendencia(
+    serie
+      .filter((m) => !m.es_provisorio)
+      .slice(-MESES_TENDENCIA)
+      .map((m) => m.sesiones_por_paciente),
+    "pct",
+  );
+
+  const flecha =
+    t.direccion === "creciendo" ? "↑" : t.direccion === "bajando" ? "↓" : "→";
+  const tono =
+    t.direccion === "creciendo"
+      ? "text-forest"
+      : t.direccion === "bajando"
+        ? "text-coral"
+        : "text-ter";
+
+  return (
+    <p className="mt-0.5 text-xs text-ter">
+      ×{valor.toFixed(1).replace(".", ",")} sesiones por paciente
+      {t.direccion === "sin_datos" ? null : (
+        <span className={tono}> {flecha}</span>
+      )}
+    </p>
   );
 }
 

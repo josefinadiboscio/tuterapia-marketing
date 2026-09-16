@@ -18,6 +18,46 @@ export const maxDuration = 60;
  * Temporary: delete once the queries are validated against Looker.
  */
 const PROBES: Record<string, string> = {
+  // "Sessions per patient" is expected around 9,6 in AR and 13 in UY. The
+  // stored figure is 3,77 and 4,46 — the LTV multiplier, which counts only the
+  // sessions a registration cohort does inside its first 90 days. These are
+  // the other ways to ask the same question, side by side, so the definition
+  // that lands on 9,6 and 13 is picked rather than guessed.
+  sesiones_por_paciente_definiciones: `
+    SELECT l.paisDominio AS pais,
+           COUNT(DISTINCT s.id_paciente) AS pacientes_con_sesion,
+           COUNT(*) AS sesiones_totales,
+           ROUND(COUNT(*) / COUNT(DISTINCT s.id_paciente), 2)
+             AS a_lifetime_por_paciente_con_sesion,
+           ROUND(COUNT(*) / COUNT(DISTINCT CASE WHEN pp.id_paciente IS NOT NULL
+                                                THEN s.id_paciente END), 2)
+             AS b_lifetime_por_comprador,
+           ROUND(SUM(s.fecha >= '2026-08-01' AND s.fecha < '2026-09-01')
+                 / NULLIF(COUNT(DISTINCT CASE WHEN s.fecha >= '2026-08-01'
+                                               AND s.fecha < '2026-09-01'
+                                              THEN s.id_paciente END), 0), 2)
+             AS c_sesiones_por_activo_en_agosto
+      FROM sesiones s
+      JOIN login l ON l.id = s.id_paciente AND l.tipo = 1
+      LEFT JOIN (SELECT DISTINCT id_paciente FROM pacientes_pagos
+                  WHERE confirmado = 1) pp ON pp.id_paciente = s.id_paciente
+     WHERE s.realizada = 1 AND l.paisDominio IN ('AR','UY')
+     GROUP BY l.paisDominio`,
+
+  // The same lifetime average restricted to cohorts old enough to be finished,
+  // and month by month, to see whether it drifts up by about 0,2 a month.
+  sesiones_por_paciente_por_mes: `
+    SELECT l.paisDominio AS pais,
+           DATE_FORMAT(DATE_SUB(l.creacion, INTERVAL 3 HOUR), '%Y-%m') AS cohorte,
+           COUNT(DISTINCT s.id_paciente) AS pacientes,
+           ROUND(COUNT(s.id) / NULLIF(COUNT(DISTINCT s.id_paciente), 0), 2)
+             AS lifetime_por_paciente
+      FROM login l
+      JOIN sesiones s ON s.id_paciente = l.id AND s.realizada = 1
+     WHERE l.tipo = 1 AND l.paisDominio IN ('AR','UY')
+       AND l.creacion >= '2025-09-01'
+     GROUP BY 1, 2 ORDER BY 1, 2`,
+
   // The dashboard says 58 new patients on 7 Sep across both countries; Looker
   // says 53. The two halves add up internally (AR 44 + UY 14), so the gap is a
   // definition, not a sum. Each column is one candidate, on the same day:

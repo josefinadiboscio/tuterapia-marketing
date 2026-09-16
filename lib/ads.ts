@@ -201,9 +201,21 @@ export async function leerAds(pais: string, semana?: string): Promise<VistaAds> 
 
     const filas: FilaPlataforma[] = [];
 
-    // Only platforms with spend or traffic, and only real ones: a verdict on
-    // "Sin utm" would be a verdict on everything nobody tagged.
-    for (const [clave, acc] of porPlataforma) {
+    // Platforms with spend OR traffic. Walking only the traffic side would
+    // hide a platform that is spending and bringing nothing, which is the one
+    // row nobody can afford to miss.
+    const vacio: Acc = {
+      registros: 0,
+      nuevos: 0,
+      convertidos: 0,
+      campanas: new Map(),
+    };
+
+    for (const clave of new Set([
+      ...porPlataforma.keys(),
+      ...gastoPorClave.keys(),
+    ])) {
+      const acc = porPlataforma.get(clave) ?? vacio;
       const [paisFila, plataforma] = clave.split("|") as [string, string];
       const gasto = gastoPorClave.get(clave) ?? 0;
       if (gasto === 0 && acc.registros === 0) continue;

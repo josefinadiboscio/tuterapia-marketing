@@ -17,15 +17,6 @@ export const dynamic = "force-dynamic";
  */
 const VOLUMEN = [
   {
-    id: "registros",
-    nombre: "Registros",
-    campo: (m: MesSerie) => m.registros,
-    tramo: (m: MesSerie) => m.registros_tramo_previo,
-    formato: (n: number | null) => entero(n),
-    unidad: "pct" as const,
-    definicion: "Cuentas creadas en el mes, excluyendo terapeutas.",
-  },
-  {
     id: "nuevos",
     nombre: "Pacientes nuevos",
     campo: (m: MesSerie) => m.pacientes_nuevos,
@@ -34,6 +25,15 @@ const VOLUMEN = [
     unidad: "pct" as const,
     definicion:
       "Pacientes con su primer pago confirmado en el mes. Se cuentan en el mes de la venta.",
+  },
+  {
+    id: "registros",
+    nombre: "Registros",
+    campo: (m: MesSerie) => m.registros,
+    tramo: (m: MesSerie) => m.registros_tramo_previo,
+    formato: (n: number | null) => entero(n),
+    unidad: "pct" as const,
+    definicion: "Cuentas creadas en el mes, excluyendo terapeutas.",
   },
   {
     id: "activos",
@@ -344,7 +344,7 @@ function Card({
       ) : (
         <>
           <p className="mt-1 text-2xl text-texto">
-            {metrica.formato(metrica.campo(ultimo ?? ({} as MesSerie)))}
+            {metrica.formato(ultimoValor(serie, metrica.campo))}
           </p>
           <DeltaCard ultimo={ultimo} cerrados={cerrados} metrica={metrica} />
         </>

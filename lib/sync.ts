@@ -201,6 +201,46 @@ export async function sincronizarMes(
   await transaction(db, async () => {
     for (const fila of filas) await upsert(db, fila);
 
+    // The campaign grain, kept raw so the mapping can be fixed later without a
+    // resync. Rebuilt for the month rather than merged, so a source that stops
+    // appearing does not linger.
+    await db.query(`delete from marketing.metricas_utm_mensual where mes = $1`, [
+      `${mes}-01`,
+    ]);
+    for (const pais of PAISES as readonly Pais[]) {
+      const m = crudos[pais];
+      if (!m) continue;
+      const filas = new Map<
+        string,
+        { registros: number | null; nuevos: number | null; activos: number | null; convertidos: number | null }
+      >();
+      const tocar = (source: string) => {
+        let v = filas.get(source);
+        if (!v) {
+          v = { registros: null, nuevos: null, activos: null, convertidos: null };
+          filas.set(source, v);
+        }
+        return v;
+      };
+      for (const f of m.porSource) tocar(f.utm_source).registros = f.n;
+      for (const f of m.nuevosPorSource) tocar(f.utm_source).nuevos = f.n;
+      for (const f of m.activosPorSource) tocar(f.utm_source).activos = f.n;
+      for (const f of m.conversionSource) {
+        const v = tocar(f.utm_source);
+        v.registros = f.registros;
+        v.convertidos = f.convertidos;
+      }
+      for (const [source, v] of filas) {
+        await db.query(
+          `insert into marketing.metricas_utm_mensual
+             (mes, pais, utm_source, registros, pacientes_nuevos,
+              pacientes_activos, convertidos)
+           values ($1, $2, $3, $4, $5, $6, $7)`,
+          [`${mes}-01`, pais, source, v.registros, v.nuevos, v.activos, v.convertidos],
+        );
+      }
+    }
+
     for (const f of sesionesCohorte) {
       await db.query(
         `insert into marketing.cohorte_sesiones

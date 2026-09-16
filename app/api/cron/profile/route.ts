@@ -73,6 +73,46 @@ const PROBES: Record<string, string> = {
            SUM(usadas > sesiones) AS usadas_mayor_que_compradas
       FROM pacientes_pagos GROUP BY confirmado ORDER BY confirmado`,
 
+  // The margin reads US$5 a session in AR and US$11 in UY, against a list
+  // price the user puts near US$17 and US$28. A miss of the same size in two
+  // countries with different prices and different commissions is not two
+  // coincidences, so this reproduces precioPorSesion's own arithmetic split by
+  // currency: whichever currency carries the weight is the one distorting it.
+  margen_por_moneda: `
+    SELECT l.paisDominio AS pais, pp.moneda,
+           COUNT(*) AS pagos,
+           SUM(pp.sesiones) AS sesiones,
+           ROUND(SUM(pp.monto)) AS monto_total,
+           ROUND(SUM(pp.monto) / SUM(pp.sesiones), 2) AS precio_sesion,
+           ROUND(AVG(pp.sesiones), 2) AS paquete_promedio,
+           ROUND(MIN(pp.monto / pp.sesiones), 2) AS min_unit,
+           ROUND(MAX(pp.monto / pp.sesiones), 2) AS max_unit
+      FROM pacientes_pagos pp
+      JOIN login l ON l.id = pp.id_paciente AND l.tipo = 1
+     WHERE pp.confirmado = 1 AND pp.monto > 0 AND pp.sesiones > 0
+       AND l.paisDominio IN ('AR', 'UY')
+       AND pp.creacion >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
+     GROUP BY 1, 2 ORDER BY 1, 2`,
+
+  // Same window, bucketed by unit price, to see whether one cheap cluster is
+  // dragging the weighted average or the whole distribution sits low.
+  margen_distribucion: `
+    SELECT l.paisDominio AS pais, pp.moneda,
+           CASE
+             WHEN pp.monto / pp.sesiones < 1000 THEN 'a <1k'
+             WHEN pp.monto / pp.sesiones < 5000 THEN 'b 1k-5k'
+             WHEN pp.monto / pp.sesiones < 15000 THEN 'c 5k-15k'
+             WHEN pp.monto / pp.sesiones < 30000 THEN 'd 15k-30k'
+             ELSE 'e 30k+'
+           END AS rango_unitario,
+           COUNT(*) AS pagos, SUM(pp.sesiones) AS sesiones
+      FROM pacientes_pagos pp
+      JOIN login l ON l.id = pp.id_paciente AND l.tipo = 1
+     WHERE pp.confirmado = 1 AND pp.monto > 0 AND pp.sesiones > 0
+       AND l.paisDominio IN ('AR', 'UY')
+       AND pp.creacion >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
+     GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`,
+
   // pacientes_pagos has its own paisDominio. Does it match the login's?
   pagos_pais_vs_login: `
     SELECT pp.paisDominio AS pais_pago, l.paisDominio AS pais_login, COUNT(*) AS n

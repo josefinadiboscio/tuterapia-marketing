@@ -21,7 +21,11 @@ import {
   curvaConversion,
   diasHastaPrimeraSesion,
 } from "@/lib/queries/conversion";
-import { sesionesPorPaciente, precioPorSesion } from "@/lib/queries/ltv";
+import {
+  sesionesPorPaciente,
+  precioPorSesion,
+  sesionesHistoricoPorPaciente,
+} from "@/lib/queries/ltv";
 import {
   percentil,
   conversion,
@@ -62,6 +66,8 @@ type Fila = {
   cac_usd: number | null;
   costo_por_registro_usd: number | null;
   sesiones_por_paciente: number | null;
+  /** Lifetime sessions per patient, whole base, as of this month. */
+  sesiones_historico: number | null;
   margen_usd_sesion: number | null;
   ltv_usd: number | null;
   cohorte_cerrada: boolean;
@@ -300,6 +306,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     cohorteSes,
     compradores,
     histSesion,
+    historico,
   ] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
@@ -318,6 +325,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     cohorteSesiones(mysql, mes, pais),
     compradoresDeCohorte(mysql, mes, pais),
     diasHastaPrimeraSesion(mysql, mes, pais),
+    sesionesHistoricoPorPaciente(mysql, mes, pais),
   ]);
 
   return {
@@ -338,6 +346,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     cohorteSes,
     compradores,
     histSesion,
+    historico,
   };
 }
 
@@ -403,6 +412,10 @@ function armarFila({
       gastoUsd === null ? null : cac(gastoUsd, medido.registros),
     // The LTV factors only mean something once the cohort has closed.
     sesiones_por_paciente: cerrada ? porPaciente : null,
+    sesiones_historico:
+      medido.historico.pacientes > 0
+        ? medido.historico.sesiones / medido.historico.pacientes
+        : null,
     margen_usd_sesion: margen,
     ltv_usd: cerrada ? ltv(porPaciente, margen) : null,
     cohorte_cerrada: cerrada,
@@ -514,6 +527,14 @@ function armarTotal(
       gastoUsd === null ? null : cac(gastoUsd, suma((m) => m.registros)),
     sesiones_por_paciente:
       cerrada && pacientes > 0 ? sesiones / pacientes : null,
+    // The sessions of both countries over the patients of both, never the
+    // average of the two averages: Uruguay's patients stay about half again
+    // as long, so weighting them equally would describe neither market.
+    sesiones_historico: (() => {
+      const ses = suma((m) => m.historico.sesiones);
+      const pac = suma((m) => m.historico.pacientes);
+      return pac > 0 ? ses / pac : null;
+    })(),
     // A single margin across two currencies would be meaningless.
     margen_usd_sesion: null,
     ltv_usd: null,
@@ -633,6 +654,7 @@ function filaVacia(
     cac_usd: null,
     costo_por_registro_usd: null,
     sesiones_por_paciente: null,
+    sesiones_historico: null,
     margen_usd_sesion: null,
     ltv_usd: null,
     cohorte_cerrada: false,
@@ -654,13 +676,14 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        mediana_dias_compra, p80_dias_compra, mediana_dias_sesion,
        p80_dias_sesion, compran_24h, gasto_usd, cac_usd,
        costo_por_registro_usd,
-       sesiones_por_paciente, margen_usd_sesion, ltv_usd, cohorte_cerrada,
+       sesiones_por_paciente, sesiones_historico, margen_usd_sesion,
+       ltv_usd, cohorte_cerrada,
        churn_rate, es_provisorio, registros_tramo_previo,
        pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
        tramo_dias, actualizado_en
      ) values (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-       $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, now()
+       $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, now()
      )
      on conflict (mes, pais, plataforma) do update set
        registros = excluded.registros,
@@ -679,6 +702,7 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        cac_usd = excluded.cac_usd,
        costo_por_registro_usd = excluded.costo_por_registro_usd,
        sesiones_por_paciente = excluded.sesiones_por_paciente,
+       sesiones_historico = excluded.sesiones_historico,
        margen_usd_sesion = excluded.margen_usd_sesion,
        ltv_usd = excluded.ltv_usd,
        cohorte_cerrada = excluded.cohorte_cerrada,
@@ -709,6 +733,7 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
       fila.cac_usd,
       fila.costo_por_registro_usd,
       fila.sesiones_por_paciente,
+      fila.sesiones_historico,
       fila.margen_usd_sesion,
       fila.ltv_usd,
       fila.cohorte_cerrada,

@@ -104,3 +104,42 @@ export async function precioPorSesion(
     precio_sesion: Number(r.precio_sesion),
   }));
 }
+
+/**
+ * Sessions an average patient has done at Tu Terapia, over their whole life,
+ * counted up to the end of the month.
+ *
+ * A different question from `sesionesPorPaciente`, which is the LTV multiplier
+ * and only counts what a registration cohort does inside its first 90 days.
+ * That one has to be windowed or an older cohort would always look better for
+ * having had longer. This one is meant to drift: it is the tenure of the whole
+ * patient base, and it moves a couple of tenths a month.
+ *
+ * The denominator is everyone who sat down at least once, with or without a
+ * confirmed payment row — a promo session is still a session a patient did.
+ *
+ * Returns the two parts rather than the ratio, because TOTAL is the sessions
+ * of both countries over the patients of both, never the average of two
+ * averages.
+ */
+export async function sesionesHistoricoPorPaciente(
+  conn: Connection,
+  mes: string,
+  pais: Pais,
+): Promise<{ sesiones: number; pacientes: number }> {
+  const { end } = monthRangeUtc(mes);
+  const [rows] = await conn.query<
+    (RowDataPacket & { sesiones: number; pacientes: number })[]
+  >(
+    `SELECT COUNT(*) AS sesiones,
+            COUNT(DISTINCT s.id_paciente) AS pacientes
+       FROM sesiones s
+       JOIN login l ON l.id = s.id_paciente AND l.tipo = 1
+      WHERE s.realizada = 1 AND l.paisDominio = ? AND s.fecha < ?`,
+    [pais, end],
+  );
+  return {
+    sesiones: Number(rows[0]?.sesiones ?? 0),
+    pacientes: Number(rows[0]?.pacientes ?? 0),
+  };
+}

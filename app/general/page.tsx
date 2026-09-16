@@ -211,10 +211,15 @@ type Metrica = {
   /** The same format, as a name: a function cannot cross into the chart. */
   formatoId: FormatoId;
   /**
-   * Show the sessions per patient under the number. LTV is that multiplier
-   * times the margin a session leaves, and the two move for different
-   * reasons: the price changing is not the same news as patients coming back
-   * more often, and the product alone cannot tell them apart.
+   * Show how many sessions a patient does, over their whole life, under the
+   * number.
+   *
+   * Deliberately NOT the figure the LTV above is built from. That one is
+   * windowed at ninety days, which it has to be or an older cohort would
+   * always look better for having had longer; this one is the tenure of the
+   * whole base and is the number anyone actually means by "how many sessions
+   * does a patient do". Written without a × so it does not read as a
+   * multiplication into the number above, because it is not one.
    */
   multiplicador?: boolean;
   unidad: "pct" | "pp";
@@ -438,31 +443,32 @@ function Card({
  * showing: both are null until the cohort closes at ninety days.
  */
 function Multiplicador({ serie }: { serie: MesSerie[] }) {
-  const valor = ultimoValor(serie, (m) => m.sesiones_por_paciente);
+  const cerrados = serie.filter((m) => !m.es_provisorio);
+  const valor = ultimoValor(cerrados, (m) => m.sesiones_historico);
   if (valor === null) return null;
 
-  const t = tendencia(
-    serie
-      .filter((m) => !m.es_provisorio)
-      .slice(-MESES_TENDENCIA)
-      .map((m) => m.sesiones_por_paciente),
-    "pct",
-  );
+  // Against the month before, not a six-month slope: this number drifts by
+  // tenths, and a slope over tenths reads as noise.
+  const previo = ultimoValor(cerrados.slice(0, -1), (m) => m.sesiones_historico);
+  const delta = previo === null ? null : valor - previo;
 
-  const flecha =
-    t.direccion === "creciendo" ? "↑" : t.direccion === "bajando" ? "↓" : "→";
+  const uno = (n: number) => n.toFixed(1).replace(".", ",");
   const tono =
-    t.direccion === "creciendo"
-      ? "text-forest"
-      : t.direccion === "bajando"
-        ? "text-coral"
-        : "text-ter";
+    delta === null || Math.abs(delta) < 0.05
+      ? "text-ter"
+      : delta > 0
+        ? "text-forest"
+        : "text-coral";
 
   return (
     <p className="mt-0.5 text-xs text-ter">
-      ×{valor.toFixed(1).replace(".", ",")} sesiones por paciente
-      {t.direccion === "sin_datos" ? null : (
-        <span className={tono}> {flecha}</span>
+      {uno(valor)} sesiones por paciente
+      {delta === null || Math.abs(delta) < 0.05 ? null : (
+        <span className={tono}>
+          {" "}
+          {delta > 0 ? "+" : "−"}
+          {uno(Math.abs(delta))}
+        </span>
       )}
     </p>
   );

@@ -12,6 +12,8 @@ export type MesSerie = {
   ltv_usd: number | null;
   /** The LTV multiplier: sessions an average patient of the cohort does. */
   sesiones_por_paciente: number | null;
+  /** Lifetime sessions per patient across the whole base, as of this month. */
+  sesiones_historico: number | null;
   es_provisorio: boolean;
   /** How many days of the month the provisional row covers. */
   tramo_dias: number | null;
@@ -56,7 +58,7 @@ export async function leerGeneral(
       db.query<MesSerie & { registros: string }>(
         `select to_char(mes, 'YYYY-MM') as mes, registros, pacientes_nuevos,
                 pacientes_activos, conversion_cohorte, cac_usd,
-                costo_por_registro_usd, ltv_usd, sesiones_por_paciente,
+                costo_por_registro_usd, ltv_usd, sesiones_historico,
                 es_provisorio,
                 tramo_dias, registros_tramo_previo,
                 pacientes_nuevos_tramo_previo
@@ -85,7 +87,7 @@ export async function leerGeneral(
               const { rows } = await db.query(
                 `select to_char(mes, 'YYYY-MM') as mes, registros, pacientes_nuevos,
                         pacientes_activos, conversion_cohorte, cac_usd,
-                        costo_por_registro_usd, ltv_usd, sesiones_por_paciente,
+                        costo_por_registro_usd, ltv_usd, sesiones_historico,
                 es_provisorio,
                 tramo_dias, registros_tramo_previo,
                 pacientes_nuevos_tramo_previo
@@ -156,6 +158,7 @@ function normalizar(fila: Record<string, unknown>): MesSerie {
     costo_por_registro_usd: num(fila.costo_por_registro_usd),
     ltv_usd: num(fila.ltv_usd),
     sesiones_por_paciente: num(fila.sesiones_por_paciente),
+    sesiones_historico: num(fila.sesiones_historico),
     es_provisorio: Boolean(fila.es_provisorio),
     tramo_dias: num(fila.tramo_dias),
     registros_tramo_previo: num(fila.registros_tramo_previo),

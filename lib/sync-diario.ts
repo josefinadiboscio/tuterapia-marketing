@@ -10,6 +10,11 @@ import {
   ultimosDias,
   type PorDia,
 } from "@/lib/queries/diarias";
+import {
+  pacientesNuevosPorDiaYSource,
+  pacientesActivosPorDiaYSource,
+  conversionPorDiaYSource,
+} from "@/lib/queries/por-source";
 import { conversion } from "@/lib/metrics";
 import { resolverPlataforma, type UtmMapping } from "@/lib/utm";
 import { transaction } from "@/lib/db";
@@ -22,6 +27,7 @@ type FilaDiaria = {
   plataforma: string;
   registros: number | null;
   pacientes_nuevos: number | null;
+  pacientes_activos: number | null;
   conversion: number | null;
   conversion_proyectada: boolean;
   cohorte_edad_dias: number | null;
@@ -49,12 +55,24 @@ export async function sincronizarDias(
   const totales = new Map<string, FilaDiaria>();
 
   for (const pais of PAISES as readonly Pais[]) {
-    const [registros, porSource, nuevos, conversiones, curva] = await Promise.all([
+    const [
+      registros,
+      porSource,
+      nuevos,
+      conversiones,
+      curva,
+      nuevosSource,
+      activosSource,
+      convSource,
+    ] = await Promise.all([
       registrosPorDia(mysql, rango, pais),
       registrosPorDiaYSource(mysql, rango, pais),
       pacientesNuevosPorDia(mysql, rango, pais),
       conversionPorDia(mysql, rango, pais),
       curvaConversion(mysql, pais),
+      pacientesNuevosPorDiaYSource(mysql, rango, pais),
+      pacientesActivosPorDiaYSource(mysql, rango, pais),
+      conversionPorDiaYSource(mysql, rango, pais),
     ]);
 
     const porFecha = indexar(registros);
@@ -70,6 +88,7 @@ export async function sincronizarDias(
         plataforma: "TODAS",
         registros: porFecha.get(dia.dia) ?? 0,
         pacientes_nuevos: nuevosPorFecha.get(dia.dia) ?? 0,
+        pacientes_activos: null,
         conversion: conv.valor,
         conversion_proyectada: conv.proyectada,
         cohorte_edad_dias: edad,
@@ -78,24 +97,60 @@ export async function sincronizarDias(
       acumularTotal(totales, fila);
     }
 
-    // Platform rows carry volume only: a conversion split by platform on a
-    // single day rests on a handful of registrations.
-    const porPlataforma = new Map<string, number>();
-    for (const fila of porSource) {
-      const clave = `${fila.dia}|${resolverPlataforma(fila.utm_source, mapping)}`;
-      porPlataforma.set(clave, (porPlataforma.get(clave) ?? 0) + fila.n);
+    // Platform rows now carry the same four metrics as the country row, so the
+    // General charts can stack whichever one the card selects.
+    //
+    // A day's conversion for one platform rests on a handful of registrations,
+    // so it is projected through the same maturity curve as the country's and
+    // marked as projected. It is a shape, not a number to quote.
+    const sumar = (
+      destino: Map<string, number>,
+      filas: { dia: string; utm_source: string; n: number }[],
+    ) => {
+      for (const f of filas) {
+        const clave = `${f.dia}|${resolverPlataforma(f.utm_source, mapping)}`;
+        destino.set(clave, (destino.get(clave) ?? 0) + f.n);
+      }
+    };
+
+    const regPlat = new Map<string, number>();
+    const nuevosPlat = new Map<string, number>();
+    const activosPlat = new Map<string, number>();
+    sumar(regPlat, porSource);
+    sumar(nuevosPlat, nuevosSource);
+    sumar(activosPlat, activosSource);
+
+    const convPlat = new Map<string, { registros: number; convertidos: number }>();
+    for (const f of convSource) {
+      const clave = `${f.dia}|${resolverPlataforma(f.utm_source, mapping)}`;
+      const acc = convPlat.get(clave) ?? { registros: 0, convertidos: 0 };
+      acc.registros += f.registros;
+      acc.convertidos += f.convertidos;
+      convPlat.set(clave, acc);
     }
-    for (const [clave, n] of porPlataforma) {
+
+    for (const clave of new Set([
+      ...regPlat.keys(),
+      ...nuevosPlat.keys(),
+      ...activosPlat.keys(),
+    ])) {
       const [fecha, plataforma] = clave.split("|");
+      const edad = edadEnDias(fecha!, ahora);
+      const c = convPlat.get(clave);
+      const conv = c
+        ? conversion(c.registros, c.convertidos, edad, curva)
+        : { valor: null, proyectada: false };
+
       filas.push({
         fecha: fecha!,
         pais,
         plataforma: plataforma!,
-        registros: n,
-        pacientes_nuevos: null,
-        conversion: null,
-        conversion_proyectada: false,
-        cohorte_edad_dias: null,
+        registros: regPlat.get(clave) ?? null,
+        pacientes_nuevos: nuevosPlat.get(clave) ?? null,
+        pacientes_activos: activosPlat.get(clave) ?? null,
+        conversion: conv.valor,
+        conversion_proyectada: conv.proyectada,
+        cohorte_edad_dias: edad,
       });
     }
   }
@@ -126,6 +181,10 @@ function acumularTotal(totales: Map<string, FilaDiaria>, fila: FilaDiaria) {
   previo.registros = (previo.registros ?? 0) + (fila.registros ?? 0);
   previo.pacientes_nuevos =
     (previo.pacientes_nuevos ?? 0) + (fila.pacientes_nuevos ?? 0);
+  if (fila.pacientes_activos !== null) {
+    previo.pacientes_activos =
+      (previo.pacientes_activos ?? 0) + fila.pacientes_activos;
+  }
   // Weighted by registrations, which is the cohort each rate is over.
   const pesoPrevio = previo.registros - (fila.registros ?? 0);
   if (previo.conversion !== null && fila.conversion !== null && previo.registros > 0) {
@@ -149,12 +208,13 @@ function edadEnDias(fecha: string, ahora: Date): number {
 async function upsert(db: Client, fila: FilaDiaria): Promise<void> {
   await db.query(
     `insert into marketing.metricas_diarias
-       (fecha, pais, plataforma, registros, pacientes_nuevos, conversion,
-        conversion_proyectada, cohorte_edad_dias, actualizado_en)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+       (fecha, pais, plataforma, registros, pacientes_nuevos, pacientes_activos,
+        conversion, conversion_proyectada, cohorte_edad_dias, actualizado_en)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
      on conflict (fecha, pais, plataforma) do update set
        registros = excluded.registros,
        pacientes_nuevos = excluded.pacientes_nuevos,
+       pacientes_activos = excluded.pacientes_activos,
        conversion = excluded.conversion,
        conversion_proyectada = excluded.conversion_proyectada,
        cohorte_edad_dias = excluded.cohorte_edad_dias,
@@ -165,6 +225,7 @@ async function upsert(db: Client, fila: FilaDiaria): Promise<void> {
       fila.plataforma,
       fila.registros,
       fila.pacientes_nuevos,
+      fila.pacientes_activos,
       fila.conversion,
       fila.conversion_proyectada,
       fila.cohorte_edad_dias,

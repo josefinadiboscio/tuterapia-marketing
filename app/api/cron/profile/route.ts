@@ -73,6 +73,60 @@ const PROBES: Record<string, string> = {
            SUM(usadas > sesiones) AS usadas_mayor_que_compradas
       FROM pacientes_pagos GROUP BY confirmado ORDER BY confirmado`,
 
+  // The July drop from first to second session reads higher than the older
+  // cohorts. Two things to rule out: that the stages count the same people,
+  // and that the cohort is old enough to have had a second session at all.
+  //
+  // Counts straight off `sesiones`, both ways — patients with EXACTLY n and
+  // patients with AT LEAST n — because the stored table is cumulative and the
+  // two only agree if nothing is double counted. Also the youngest member of
+  // the cohort, which is what decides maturity.
+  cohorte_julio_ar: `
+    SELECT s.total AS sesiones_realizadas,
+           COUNT(*) AS pacientes_exactamente,
+           (SELECT COUNT(*)
+              FROM login l2
+              JOIN (SELECT id_paciente, COUNT(*) AS total
+                      FROM sesiones WHERE realizada = 1
+                     GROUP BY id_paciente) s2 ON s2.id_paciente = l2.id
+             WHERE l2.tipo = 1 AND l2.paisDominio = 'AR'
+               AND l2.creacion >= '2026-07-01 03:00:00'
+               AND l2.creacion <  '2026-08-01 03:00:00'
+               AND s2.total >= s.total) AS pacientes_al_menos
+      FROM login l
+      JOIN (SELECT id_paciente, COUNT(*) AS total
+              FROM sesiones WHERE realizada = 1
+             GROUP BY id_paciente) s ON s.id_paciente = l.id
+     WHERE l.tipo = 1 AND l.paisDominio = 'AR'
+       AND l.creacion >= '2026-07-01 03:00:00'
+       AND l.creacion <  '2026-08-01 03:00:00'
+     GROUP BY s.total HAVING s.total <= 6 ORDER BY s.total`,
+
+  // How long the cohort has actually had, and how long the gap between a first
+  // and a second session really is — the assumption of a session a week is
+  // what decides whether a stage is drawn or left empty.
+  madurez_julio_ar: `
+    SELECT MIN(l.creacion) AS primer_registro,
+           MAX(l.creacion) AS ultimo_registro,
+           DATEDIFF(NOW(), MAX(l.creacion)) AS dias_del_mas_nuevo,
+           COUNT(*) AS cohorte,
+           ROUND(AVG(DATEDIFF(s2.segunda, s1.primera)), 1) AS dias_1a_a_2a_prom,
+           MAX(DATEDIFF(s2.segunda, s1.primera)) AS dias_1a_a_2a_max
+      FROM login l
+      LEFT JOIN (SELECT id_paciente, MIN(fecha) AS primera
+                   FROM sesiones WHERE realizada = 1
+                  GROUP BY id_paciente) s1 ON s1.id_paciente = l.id
+      LEFT JOIN (SELECT id_paciente,
+                        MIN(CASE WHEN rn = 2 THEN fecha END) AS segunda
+                   FROM (SELECT id_paciente, fecha,
+                                ROW_NUMBER() OVER (PARTITION BY id_paciente
+                                                   ORDER BY fecha) AS rn
+                           FROM sesiones WHERE realizada = 1) x
+                  GROUP BY id_paciente) s2 ON s2.id_paciente = l.id
+     WHERE l.tipo = 1 AND l.paisDominio = 'AR'
+       AND l.creacion >= '2026-07-01 03:00:00'
+       AND l.creacion <  '2026-08-01 03:00:00'`,
+
   // The margin reads US$5 a session in AR and US$11 in UY, against a list
   // price the user puts near US$17 and US$28. A miss of the same size in two
   // countries with different prices and different commissions is not two

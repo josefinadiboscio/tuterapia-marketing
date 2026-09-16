@@ -113,6 +113,51 @@ const PROBES: Record<string, string> = {
        AND pp.creacion >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
      GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`,
 
+  // "Mediana de compra" reads 0 days with a p80 of 3, which is what
+  // registration-to-first-payment looks like when most people pay on the way
+  // in. Registration-to-first-session is a different distance and a different
+  // question. This measures both over the same cohorts so the gap between
+  // them is a number rather than a guess.
+  mediana_compra_vs_sesion: `
+    SELECT l.paisDominio AS pais,
+           DATE_FORMAT(DATE_SUB(l.creacion, INTERVAL 3 HOUR), '%Y-%m') AS mes,
+           COUNT(*) AS cohorte,
+           COUNT(pago.primera) AS compraron,
+           COUNT(ses.primera) AS con_sesion,
+           ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
+             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, pago.primera)) OVER (), 1)
+             AS mediana_pago,
+           ROUND(PERCENTILE_CONT(0.8) WITHIN GROUP (
+             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, pago.primera)) OVER (), 1)
+             AS p80_pago,
+           ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
+             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, ses.primera)) OVER (), 1)
+             AS mediana_sesion,
+           ROUND(PERCENTILE_CONT(0.8) WITHIN GROUP (
+             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, ses.primera)) OVER (), 1)
+             AS p80_sesion
+      FROM login l
+      LEFT JOIN (SELECT id_paciente, MIN(creacion) AS primera
+                   FROM pacientes_pagos WHERE confirmado = 1
+                  GROUP BY id_paciente) pago ON pago.id_paciente = l.id
+      LEFT JOIN (SELECT id_paciente, MIN(fecha) AS primera
+                   FROM sesiones WHERE realizada = 1
+                  GROUP BY id_paciente) ses ON ses.id_paciente = l.id
+     WHERE l.tipo = 1 AND l.paisDominio IN ('AR', 'UY')
+       AND l.creacion >= '2026-05-01' AND l.creacion < '2026-08-01'
+     GROUP BY 1, 2 ORDER BY 1, 2`,
+
+  // How far cohorts actually get: patients per nth realized session. Feeds the
+  // cohorte_sesiones table and says up front whether counting to 12 is
+  // generous or tight.
+  sesiones_por_orden: `
+    SELECT l.paisDominio AS pais, s.n AS nro_sesion, COUNT(*) AS pacientes
+      FROM (SELECT id_paciente, COUNT(*) AS n
+              FROM sesiones WHERE realizada = 1 GROUP BY id_paciente) s
+      JOIN login l ON l.id = s.id_paciente AND l.tipo = 1
+     WHERE l.paisDominio IN ('AR', 'UY') AND s.n <= 20
+     GROUP BY 1, 2 ORDER BY 1, 2`,
+
   // pacientes_pagos has its own paisDominio. Does it match the login's?
   pagos_pais_vs_login: `
     SELECT pp.paisDominio AS pais_pago, l.paisDominio AS pais_login, COUNT(*) AS n

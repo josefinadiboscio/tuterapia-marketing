@@ -30,6 +30,12 @@ import {
   margenUsdSesion,
   edadCohorteDias,
 } from "@/lib/metrics";
+import {
+  pacientesNuevosPorSource,
+  pacientesActivosPorSource,
+  conversionPorSource,
+  cohorteSesiones,
+} from "@/lib/queries/por-source";
 import { resolverPlataforma, SIN_MAPEAR, type UtmMapping } from "@/lib/utm";
 import { transaction } from "@/lib/db";
 
@@ -122,14 +128,29 @@ export async function sincronizarMes(
       }),
     );
 
-    // Per-platform rows carry volume only. LTV or churn split by platform
-    // would leave cohorts of three patients.
-    for (const [plataforma, n] of Object.entries(
-      agruparPorPlataforma(medido.porSource, mapping),
-    )) {
+    // Per-platform rows carry volume and conversion. LTV, CAC and churn stay
+    // out: spend is loaded per platform but a cohort's sessions and margin
+    // split that far leave groups of three patients, and a ratio built on
+    // three patients is an opinion.
+    const regPlat = agruparPorPlataforma(medido.porSource, mapping);
+    const nuevosPlat = agruparPorPlataforma(medido.nuevosPorSource, mapping);
+    const activosPlat = agruparPorPlataforma(medido.activosPorSource, mapping);
+    const convPlat = agruparConversion(medido.conversionSource, mapping);
+
+    for (const plataforma of new Set([
+      ...Object.keys(regPlat),
+      ...Object.keys(nuevosPlat),
+      ...Object.keys(activosPlat),
+    ])) {
+      const c = convPlat[plataforma];
       filas.push({
         ...filaVacia(mes, pais, plataforma, esProvisorio),
-        registros: n,
+        registros: regPlat[plataforma] ?? null,
+        pacientes_nuevos: nuevosPlat[plataforma] ?? null,
+        pacientes_activos: activosPlat[plataforma] ?? null,
+        conversion_cohorte:
+          c && c.registros > 0 ? c.convertidos / c.registros : null,
+        cohorte_edad_dias: edad,
       });
     }
   }
@@ -146,8 +167,52 @@ export async function sincronizarMes(
       .map((fila) => ({ pais, utm_source: fila.utm_source, n: fila.n })),
   );
 
+  // How far each cohort got, session by session. Written per country and as
+  // TOTAL, so the funnel adds the markets without adding two percentages.
+  const sesionesCohorte = (PAISES as readonly Pais[]).flatMap((pais) => {
+    const c = crudos[pais]?.cohorteSes;
+    if (!c) return [];
+    return c.porSesion.map((p) => ({
+      pais: pais as string,
+      nro: p.nro,
+      pacientes: p.pacientes,
+      cohorteN: c.cohorteN,
+    }));
+  });
+
+  const total = sesionesCohorte.reduce<Record<number, { p: number; n: number }>>(
+    (acc, f) => {
+      const a = (acc[f.nro] ??= { p: 0, n: 0 });
+      a.p += f.pacientes;
+      a.n += f.cohorteN;
+      return acc;
+    },
+    {},
+  );
+  for (const [nro, v] of Object.entries(total)) {
+    sesionesCohorte.push({
+      pais: "TOTAL",
+      nro: Number(nro),
+      pacientes: v.p,
+      cohorteN: v.n,
+    });
+  }
+
   await transaction(db, async () => {
     for (const fila of filas) await upsert(db, fila);
+
+    for (const f of sesionesCohorte) {
+      await db.query(
+        `insert into marketing.cohorte_sesiones
+           (cohorte, pais, nro_sesion, pacientes, cohorte_n)
+         values ($1, $2, $3, $4, $5)
+         on conflict (cohorte, pais, nro_sesion) do update set
+           pacientes = excluded.pacientes,
+           cohorte_n = excluded.cohorte_n,
+           actualizado_en = now()`,
+        [`${mes}-01`, f.pais, f.nro, f.pacientes, f.cohorteN],
+      );
+    }
 
     await db.query(
       `delete from marketing.utm_sin_mapear where mes = $1`,
@@ -181,6 +246,10 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     porPaciente,
     precios,
     porSource,
+    nuevosPorSource,
+    activosPorSource,
+    conversionSource,
+    cohorteSes,
   ] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
@@ -193,6 +262,10 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     sesionesPorPaciente(mysql, mes, pais),
     precioPorSesion(mysql, mes, pais),
     registrosPorSource(mysql, rango, pais),
+    pacientesNuevosPorSource(mysql, mes, pais),
+    pacientesActivosPorSource(mysql, mes, pais),
+    conversionPorSource(mysql, mes, pais),
+    cohorteSesiones(mysql, mes, pais),
   ]);
 
   return {
@@ -207,6 +280,10 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     porPaciente,
     precios,
     porSource,
+    nuevosPorSource,
+    activosPorSource,
+    conversionSource,
+    cohorteSes,
   };
 }
 
@@ -440,6 +517,24 @@ function agruparPorPlataforma(
   for (const fila of porSource) {
     const plataforma = resolverPlataforma(fila.utm_source, mapping);
     out[plataforma] = (out[plataforma] ?? 0) + fila.n;
+  }
+  return out;
+}
+
+/**
+ * Conversion cannot be added across sources: it is a rate. The numerator and
+ * the denominator are added instead, and the rate is taken once at the end.
+ */
+function agruparConversion(
+  porSource: { utm_source: string; registros: number; convertidos: number }[],
+  mapping: UtmMapping[],
+): Record<string, { registros: number; convertidos: number }> {
+  const out: Record<string, { registros: number; convertidos: number }> = {};
+  for (const fila of porSource) {
+    const plataforma = resolverPlataforma(fila.utm_source, mapping);
+    const acc = (out[plataforma] ??= { registros: 0, convertidos: 0 });
+    acc.registros += fila.registros;
+    acc.convertidos += fila.convertidos;
   }
   return out;
 }

@@ -79,6 +79,48 @@ const PROBES: Record<string, string> = {
       FROM pacientes_pagos pp JOIN login l ON l.id = pp.id_paciente
      WHERE pp.confirmado = 1 GROUP BY 1, 2 ORDER BY n DESC LIMIT 20`,
 
+  // Is monto/sesiones the list price, or does a bigger package cost less per
+  // session? The reference prices sit above every observed value, which is
+  // what a volume discount looks like from the outside.
+  precio_por_tamano_paquete: `
+    SELECT paisDominio AS pais,
+           COALESCE(tipo_session, '(sin dato)') AS tipo_session,
+           sesiones AS tamano_paquete,
+           COUNT(*) AS pagos,
+           ROUND(AVG(monto)) AS monto_promedio,
+           ROUND(AVG(monto / sesiones)) AS precio_sesion,
+           ROUND(MAX(monto / sesiones)) AS precio_sesion_max
+      FROM pacientes_pagos
+     WHERE confirmado = 1 AND monto > 0 AND sesiones > 0
+       AND moneda = '$' AND paisDominio IN ('AR', 'UY')
+       AND creacion >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+     GROUP BY 1, 2, 3 ORDER BY pais, tipo_session, tamano_paquete`,
+
+  // When did the price last move? A rise days old would not show up in a
+  // six-month average, nor in its maximum if nobody has paid it yet.
+  precio_por_mes: `
+    SELECT DATE_FORMAT(DATE_SUB(creacion, INTERVAL 3 HOUR), '%Y-%m') AS mes,
+           paisDominio AS pais,
+           COALESCE(tipo_session, '(sin dato)') AS tipo_session,
+           COUNT(*) AS pagos,
+           ROUND(MAX(monto / sesiones)) AS precio_max,
+           ROUND(SUM(monto) / SUM(sesiones)) AS precio_promedio
+      FROM pacientes_pagos
+     WHERE confirmado = 1 AND monto > 0 AND sesiones > 0
+       AND moneda = '$' AND paisDominio IN ('AR', 'UY')
+       AND creacion >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+     GROUP BY 1, 2, 3 ORDER BY mes DESC, pais, tipo_session`,
+
+  // pacientes_pagos.tipo is still undocumented (METRICAS.md §9).
+  tipos_de_pago: `
+    SELECT COALESCE(tipo, -1) AS tipo, COUNT(*) AS pagos,
+           ROUND(AVG(monto / sesiones)) AS precio_sesion,
+           ROUND(AVG(sesiones), 2) AS sesiones_promedio
+      FROM pacientes_pagos
+     WHERE confirmado = 1 AND monto > 0 AND sesiones > 0
+       AND creacion >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+     GROUP BY 1 ORDER BY pagos DESC`,
+
   // Price per session split by tipo_session: online and presencial are not
   // the same product and the margin follows the price.
   precio_por_tipo_session: `

@@ -203,10 +203,22 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
 - **Anotaciones según la serie.** Con CAC seleccionado el gráfico dibuja el LTV
   como techo: mientras la línea esté abajo, cada paciente devuelve más de lo
   que costó. Con las demás series no hay banda.
+- **El apilado sigue al selector de país.** Con Total las barras se apilan por
+  país, que es la composición del total. Con AR o UY elegido no hay segundo
+  país que mostrar, así que se apilan por plataforma — con los mismos colores
+  del gráfico diario, para que una plataforma sea siempre el mismo color en
+  toda la pantalla.
+- **Tooltip por `utm_source` crudo**, en el mensual y en el diario. Al pasar el
+  mouse: el período, el total, y el desglose por source **tal cual está en la
+  base** (`metaarj7`, `tkarg`, `gadspre`), de mayor a menor, las 8 primeras y
+  el resto en "otras". Crudo y no agrupado porque ese es el string que alguien
+  escribió en una campaña y el único que puede ir a buscar; agrupar sería
+  contestar dos veces la pregunta que ya contestan las barras. El desglose es
+  **de la métrica seleccionada**: si la card es Pacientes nuevos, el detalle es
+  de pacientes nuevos.
 - **Gráfico diario en el medio**, entre los dos bloques: barras apiladas por
-  día de los últimos 30 días, un color por plataforma, con leyenda. Al pasar
-  el mouse por una columna se abre el detalle de ese día: cuánto trajo cada
-  plataforma y el total, con las demás columnas atenuadas. Muestra la
+  día de los últimos 30 días, un color por plataforma, con leyenda. **El título
+  y la serie siguen a la card seleccionada**, igual que el mensual. Muestra la
   composición que el agregado mensual esconde.
 - **Línea de lectura automática** debajo del gráfico de Economía, sobre fondo
   dorado suave. Las reglas están escritas en `METRICAS.md`: una frase que el

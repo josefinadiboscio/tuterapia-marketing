@@ -1,4 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import { mesCorto } from "@/lib/ui/format";
+import { TooltipUtm, detalleDe } from "@/components/tooltip-utm";
+import type { Punto } from "@/lib/desglose";
 
 /**
  * The chart of each General block: bars for volume, a line for economy.
@@ -34,6 +39,8 @@ export function GraficoSerie({
   formato,
   identidad,
   apiladas = false,
+  utm = [],
+  rate = false,
 }: {
   series: Serie[];
   tipo: "barras" | "linea";
@@ -46,7 +53,12 @@ export function GraficoSerie({
    * counts: stacking a rate would add two percentages, which is not a number.
    */
   apiladas?: boolean;
+  /** Raw utm_source per month, for the tooltip. */
+  utm?: Punto[];
+  /** A rate is not summed, so the tooltip shows each source's own value. */
+  rate?: boolean;
 }) {
+  const [activo, setActivo] = useState<number | null>(null);
   const valores = series.flatMap((s) =>
     s.puntos.filter((p) => p.valor !== null).map((p) => p.valor!),
   );
@@ -97,8 +109,13 @@ export function GraficoSerie({
     </figcaption>
   ) : null;
 
+  const mesActivo = activo === null ? null : meses[activo]?.mes;
+  const detalle = mesActivo
+    ? detalleDe(utm, mesActivo, mesCorto(mesActivo), rate)
+    : null;
+
   return (
-    <figure className="mt-5">
+    <figure className="relative mt-5">
       {marca}
       <svg
         viewBox={`0 0 ${ancho} ${margenSup + alto + 28}`}
@@ -106,6 +123,7 @@ export function GraficoSerie({
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label={`Serie de ${meses.length} meses`}
+        onMouseLeave={() => setActivo(null)}
       >
         {referencias.map((r) => (
           <g key={r}>
@@ -237,7 +255,38 @@ export function GraficoSerie({
             {p.enCurso ? " ·" : ""}
           </text>
         ))}
+
+        {/* Full-height targets the width of each slot, last so nothing painted
+            over them steals the pointer. */}
+        {meses.map((p, i) => (
+          <rect
+            key={`hit-${p.mes}`}
+            x={margenIzq + i * paso}
+            y={margenSup}
+            width={paso}
+            height={alto}
+            fill="transparent"
+            onMouseEnter={() => setActivo(i)}
+          />
+        ))}
       </svg>
+
+      {detalle ? (
+        <TooltipUtm
+          detalle={detalle}
+          estilo={
+            activo! < meses.length / 2
+              ? {
+                  left: `${((margenIzq + (activo! + 0.5) * paso) / ancho) * 100}%`,
+                  marginLeft: 10,
+                }
+              : {
+                  right: `${(1 - (margenIzq + (activo! + 0.5) * paso) / ancho) * 100}%`,
+                  marginRight: 10,
+                }
+          }
+        />
+      ) : null}
 
       {vacia ? (
         <p className="mt-1 text-[11px] text-sec">

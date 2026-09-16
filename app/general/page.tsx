@@ -2,11 +2,16 @@ import Link from "next/link";
 import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
 import { GraficoSerie, type Serie } from "@/components/grafico-serie";
 import { GraficoDiario } from "@/components/grafico-diario";
-import { leerDesgloseDiario, type MetricaSerie } from "@/lib/desglose";
+import {
+  leerDesgloseDiario,
+  leerDesgloseMensual,
+  type Desglose,
+  type MetricaSerie,
+} from "@/lib/desglose";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
 import { entero, porcentaje, usd, SIN_DATO } from "@/lib/ui/format";
-import { identidadDe, colorDe } from "@/components/identidad";
+import { identidadDe, colorDe, colorPlataforma } from "@/components/identidad";
 
 export const dynamic = "force-dynamic";
 
@@ -99,9 +104,10 @@ export default async function General({
 }) {
   const params = await searchParams;
   const ctx = await contexto(params);
-  const [vista, diario] = await Promise.all([
+  const [vista, diario, mensual] = await Promise.all([
     leerGeneral(ctx.pais, ctx.rango),
     leerDesgloseDiario(ctx.pais, metricaDiaria(params.vol)),
+    leerDesgloseMensual(ctx.pais, metricaDiaria(params.vol), ctx.rango),
   ]);
 
   const serieVol =
@@ -135,6 +141,7 @@ export default async function General({
               cerrados={cerrados}
               tipo="barras"
               porPais={vista.porPais}
+              mensual={mensual}
             />
 
             {/* Between the two blocks: the daily composition the monthly
@@ -204,6 +211,7 @@ function Bloque({
   cerrados,
   tipo,
   porPais = [],
+  mensual,
   techoLtv = false,
   lectura,
 }: {
@@ -217,6 +225,8 @@ function Bloque({
   cerrados: MesSerie[];
   tipo: "barras" | "linea";
   porPais?: VistaGeneral["porPais"];
+  /** Platform series and raw sources, for the country view and the tooltip. */
+  mensual?: Desglose;
   techoLtv?: boolean;
   lectura?: React.ReactNode;
 }) {
@@ -227,19 +237,42 @@ function Bloque({
   const color = colorDe(metrica.id);
   const borde = color.borde;
 
-  // A rate cannot be stacked: adding 8,7% to 12,5% is not a number. Counts
-  // stack by country so the composition of the total stays visible.
+  // A rate cannot be stacked: adding 8,7% to 12,5% is not a number.
+  //
+  // What the bars are split by follows the country selector. On TOTAL they
+  // stack by country, which is the composition of the total. With one country
+  // chosen there is no second country to show, so they stack by platform —
+  // the same colours the daily chart uses, so a platform is one colour across
+  // the whole screen.
   const apilable = metrica.unidad === "pct";
   const porPaises = clave === "vol" ? porPais : [];
-  const apiladas = apilable && porPaises.length > 1;
+  const apilaPorPais = apilable && porPaises.length > 1;
+  const plataformas = mensual?.plataformas ?? [];
+  const apilaPorPlataforma =
+    apilable && !apilaPorPais && clave === "vol" && plataformas.length > 0;
+  const apiladas = apilaPorPais || apilaPorPlataforma;
 
-  const series: Serie[] = apiladas
+  const series: Serie[] = apilaPorPais
     ? porPaises.map((p, i) => ({
         nombre: p.pais,
         puntos: aPuntos(p.serie, metrica),
         trazo: color.trazo,
         relleno: color.relleno,
         atenuada: i > 0,
+      }))
+    : apilaPorPlataforma
+    ? plataformas.map((nombre, i) => ({
+        nombre,
+        puntos: serie.map((m) => ({
+          mes: m.mes,
+          valor:
+            mensual!.barras.find(
+              (b) => b.periodo === m.mes && b.clave === nombre,
+            )?.valor ?? null,
+          enCurso: m.es_provisorio,
+        })),
+        trazo: colorPlataforma(i).replace("bg-", "stroke-"),
+        relleno: colorPlataforma(i).replace("bg-", "fill-"),
       }))
     : dividido
       ? porPais.map((p, i) => ({
@@ -299,6 +332,8 @@ function Bloque({
         formato={metrica.formato}
         identidad={identidadDe(ctx.pais)}
         apiladas={apiladas}
+        utm={clave === "vol" ? (mensual?.utm ?? []) : []}
+        rate={metrica.unidad === "pp"}
       />
 
       {lectura}

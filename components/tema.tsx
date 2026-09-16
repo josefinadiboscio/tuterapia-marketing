@@ -10,10 +10,11 @@ import { useEffect, useState } from "react";
  * so this component only has to reflect and change it — no flash of the wrong
  * theme on load.
  */
-type Tema = "claro" | "oscuro" | "sistema";
+/** Oscuro es el modo por defecto; claro es una elección explícita. */
+type Tema = "claro" | "oscuro";
 
 export function ToggleTema() {
-  const [tema, setTema] = useState<Tema>("sistema");
+  const [tema, setTema] = useState<Tema>("oscuro");
 
   useEffect(() => {
     const guardado = leerGuardado();
@@ -24,31 +25,21 @@ export function ToggleTema() {
     setTema(nuevo);
     aplicar(nuevo);
     try {
-      if (nuevo === "sistema") localStorage.removeItem("tema");
-      else localStorage.setItem("tema", nuevo);
+      localStorage.setItem("tema", nuevo);
     } catch {
       // Private browsing: the theme still applies for this page load.
     }
   }
 
-  const siguiente: Record<Tema, Tema> = {
-    sistema: "claro",
-    claro: "oscuro",
-    oscuro: "sistema",
-  };
-
-  const etiqueta: Record<Tema, string> = {
-    sistema: "Sistema",
-    claro: "Claro",
-    oscuro: "Oscuro",
-  };
+  const siguiente: Record<Tema, Tema> = { oscuro: "claro", claro: "oscuro" };
+  const etiqueta: Record<Tema, string> = { oscuro: "Oscuro", claro: "Claro" };
 
   return (
     <button
       type="button"
       onClick={() => cambiar(siguiente[tema])}
       className="text-ter hover:text-texto"
-      title="Cambiar entre claro, oscuro y la preferencia del sistema"
+      title="Cambiar entre oscuro y claro"
     >
       {etiqueta[tema]}
     </button>
@@ -57,25 +48,24 @@ export function ToggleTema() {
 
 function leerGuardado(): Tema {
   try {
-    const valor = localStorage.getItem("tema");
-    if (valor === "claro" || valor === "oscuro") return valor;
+    if (localStorage.getItem("tema") === "claro") return "claro";
   } catch {
-    // Ignored: falls back to the system preference.
+    // Ignored: dark is the default.
   }
-  return "sistema";
+  return "oscuro";
 }
 
 function aplicar(tema: Tema) {
   const raiz = document.documentElement;
-  if (tema === "sistema") raiz.removeAttribute("data-theme");
-  else raiz.setAttribute("data-theme", tema === "claro" ? "light" : "dark");
+  if (tema === "claro") raiz.setAttribute("data-theme", "light");
+  else raiz.removeAttribute("data-theme");
 }
 
 /** Runs before first paint so the stored choice never flashes. */
 export const SCRIPT_TEMA = `
 try {
-  var t = localStorage.getItem('tema');
-  if (t === 'claro') document.documentElement.setAttribute('data-theme', 'light');
-  if (t === 'oscuro') document.documentElement.setAttribute('data-theme', 'dark');
+  if (localStorage.getItem('tema') === 'claro') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
 } catch (e) {}
 `;

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
 import { GraficoSerie, type Serie } from "@/components/grafico-serie";
+import { GraficoDiario } from "@/components/grafico-diario";
+import { leerDiarioPorPlataforma } from "@/lib/diario";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
 import { entero, porcentaje, usd, SIN_DATO } from "@/lib/ui/format";
@@ -87,7 +89,10 @@ export default async function General({
 }) {
   const params = await searchParams;
   const ctx = await contexto(params);
-  const vista = await leerGeneral(ctx.pais, ctx.rango);
+  const [vista, diario] = await Promise.all([
+    leerGeneral(ctx.pais, ctx.rango),
+    leerDiarioPorPlataforma(ctx.pais),
+  ]);
 
   const serieVol =
     VOLUMEN.find((m) => m.id === params.vol)?.id ?? VOLUMEN[0].id;
@@ -122,6 +127,18 @@ export default async function General({
               porPais={vista.porPais}
             />
 
+            {/* Between the two blocks: the daily composition the monthly
+                aggregate hides. */}
+            <section className="mt-12">
+              <h2 className="text-xs uppercase tracking-wide text-ter">
+                Registros por plataforma · 30 días
+              </h2>
+              <GraficoDiario
+                filas={diario.filas}
+                plataformas={diario.plataformas}
+              />
+            </section>
+
             <Bloque
               titulo="Economía"
               metricas={ECONOMIA}
@@ -137,39 +154,6 @@ export default async function General({
               lectura={<Lectura vista={vista} cerrados={cerrados} />}
             />
 
-            {vista.plataformas.length > 0 ? (
-              <section className="mt-10">
-                <h2 className="text-xs uppercase tracking-wide text-ter">
-                  Registros por plataforma · {vista.serie.at(-1)?.mes}
-                </h2>
-                <ul className="mt-3 divide-y divide-borde-suave border-t border-borde">
-                  {vista.plataformas.map((p) => {
-                    const total =
-                      vista.plataformas.reduce((a, x) => a + x.registros, 0) || 1;
-                    const parte = p.registros / total;
-                    return (
-                      <li key={p.plataforma} className="py-1.5 text-sm">
-                        <div className="flex items-baseline justify-between">
-                          <span className="text-sec">{p.plataforma}</span>
-                          <span className="flex items-baseline gap-6">
-                            <span>{entero(p.registros)}</span>
-                            <span className="w-14 text-right text-ter">
-                              {porcentaje(parte)}
-                            </span>
-                          </span>
-                        </div>
-                        <div className="mt-1 h-1 w-full bg-borde-suave">
-                          <div
-                            className="h-1 bg-sage"
-                            style={{ width: `${(parte * 100).toFixed(1)}%` }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            ) : null}
           </>
         )}
       </main>

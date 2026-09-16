@@ -4,124 +4,83 @@
  * Todo el color del tablero vive acá. Ningún componente escribe un color:
  * cambiar el tema es editar este archivo y nada más.
  *
- * Cada bloque tiene su familia. Volumen es verde, Economía es teal: son dos
- * preguntas distintas y el gráfico tiene que decir de cuál se habla antes de
- * que alguien lea el título. Los números van en navy, nunca en gris — si la
- * cifra pesa lo mismo que su etiqueta, la pantalla se lee lavada.
+ * Oscuro por defecto, con toggle a claro. El naranja es la marca; el verde
+ * quedó reservado para un solo uso —el veredicto "escalar" en Ads— así que no
+ * aparece en ninguna otra parte.
  */
 :root {
-  --cream: #fdfaf6;
-  --surface: #ffffff;
-  --sage: #84b686;
-  --sage-light: #a6c69f;
-  --forest: #2d4435;
-  --teal: #397b7b;
-  --teal-deep: #285f5f;
-  --navy: #1b2549;
+  /* Acentos: los mismos hex en los dos modos. */
+  --orange: #e8833f;
+  --orange-lt: #f5a96e;
+  --orange-dk: #c25a1a;
+  --teal: #4a9b9b;
   --gold: #f5d28b;
-  --gold-soft: #fdf6e6;
-  --coral: #e59a88;
-  --muted: #617869;
-  --border: #d6d6cf;
-  --border-soft: #e8e8e1;
+  --coral: #e5705a;
+  --green: #6baf7a;
 
-  /* Roles derivados. Los componentes usan estos, no los de arriba. */
-  --bg: var(--cream);
-  --text: var(--navy);
-  --text-2: var(--muted);
-  --text-3: #8a9a8d;
-  --accent: var(--forest);
-  --warn: #9a6b1f;
-  --warn-bg: var(--gold-soft);
-  --danger: #b4503c;
-  --dim: #a8b2a9;
-}
+  /* Oscuro, el modo por defecto. */
+  --bg: #121a2e;
+  --surface: #1b2549;
+  --surface-2: #232e56;
+  --border: #2e3a66;
+  --text: #f0ede6;
+  --muted: #8b97bc;
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --cream: #11150f;
-    --surface: #182016;
-    --sage: #84b686;
-    --sage-light: #5d8a60;
-    --forest: #a6c69f;
-    --teal: #4e9f9f;
-    --teal-deep: #6fbdbd;
-    --navy: #e8ecf4;
-    --gold: #f5d28b;
-    --gold-soft: #2a2416;
-    --coral: #e59a88;
-    --muted: #97a898;
-    --border: #2b332a;
-    --border-soft: #222a21;
-
-    --bg: var(--cream);
-    --text: var(--navy);
-    --text-2: var(--muted);
-    --text-3: #75856f;
-    --accent: var(--forest);
-    --warn: var(--gold);
-    --warn-bg: var(--gold-soft);
-    --danger: var(--coral);
-    --dim: #6b7a6c;
-  }
-}
-
-:root[data-theme="dark"] {
-  --cream: #11150f;
-  --surface: #182016;
-  --sage: #84b686;
-  --sage-light: #5d8a60;
-  --forest: #a6c69f;
-  --teal: #4e9f9f;
-  --teal-deep: #6fbdbd;
-  --navy: #e8ecf4;
-  --gold: #f5d28b;
-  --gold-soft: #2a2416;
-  --coral: #e59a88;
-  --muted: #97a898;
-  --border: #2b332a;
-  --border-soft: #222a21;
-
-  --bg: var(--cream);
-  --text: var(--navy);
-  --text-2: var(--muted);
-  --text-3: #75856f;
-  --accent: var(--forest);
   --warn: var(--gold);
-  --warn-bg: var(--gold-soft);
+  --warn-bg: #2a2416;
   --danger: var(--coral);
-  --dim: #6b7a6c;
+  --danger-bg: #2c1b1a;
+  --ok-bg: #16281c;
+  --dim: #5c6688;
+}
+
+/* Claro, solo cuando se elige a mano. El fondo sigue siendo crema. */
+:root[data-theme="light"] {
+  --bg: #fdfaf6;
+  --surface: #ffffff;
+  --surface-2: #f5f1e8;
+  --border: #e2ddd0;
+  --text: #1b2549;
+  --muted: #5c6478;
+
+  --warn-bg: #fdf4e8;
+  --danger-bg: #fdefec;
+  --ok-bg: #eef6f0;
+  --dim: #a6adbd;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-borde: var(--border);
-  --color-borde-suave: var(--border-soft);
-
   --color-texto: var(--text);
-  --color-sec: var(--text-2);
-  --color-ter: var(--text-3);
+  --color-sec: var(--muted);
+  --color-ter: var(--dim);
   --color-dim: var(--dim);
 
-  --color-sage: var(--sage);
-  --color-sage-light: var(--sage-light);
-  --color-forest: var(--forest);
+  --color-orange: var(--orange);
+  --color-orange-lt: var(--orange-lt);
+  --color-orange-dk: var(--orange-dk);
   --color-teal: var(--teal);
-  --color-teal-deep: var(--teal-deep);
-  --color-navy: var(--navy);
   --color-gold: var(--gold);
-  --color-gold-soft: var(--gold-soft);
   --color-coral: var(--coral);
+  --color-green: var(--green);
 
-  --color-acento: var(--accent);
+  --color-acento: var(--orange);
   --color-warn: var(--warn);
   --color-warn-bg: var(--warn-bg);
   --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-ok-bg: var(--ok-bg);
 }
 
 html {
-  color-scheme: light dark;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {

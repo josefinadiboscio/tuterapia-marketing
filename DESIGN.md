@@ -37,38 +37,32 @@ Los números son la interfaz. Se tratan con cuidado:
 ## Tema
 
 **Todo el color vive en tokens CSS en `:root`. Ningún componente escribe un
-color.** Cambiar el tema es editar `app/globals.css` y nada más; si para
-cambiar un color hay que abrir una pantalla, el sistema está roto.
+color.** Cambiar el tema es editar `app/globals.css` y nada más.
 
-La paleta sale del sitio:
+**Oscuro por defecto**, con toggle a claro. El claro mantiene el fondo crema.
 
 ```
---cream:      #FDFAF6   fondo
---surface:    #FFFFFF   cards
---sage:       #84B686   volumen
---sage-light: #A6C69F
---forest:     #2D4435   texto fuerte, estados positivos
---teal:       #397B7B   economía
---teal-deep:  #285F5F
---navy:       #1B2549   tinta de los números
---gold:       #F5D28B   avisos
---coral:      #E59A88   series secundarias, alertas suaves
---muted:      #617869   etiquetas
---border:     #D6D6CF
+Oscuro                        Claro
+--bg        #121A2E           #FDFAF6
+--surface   #1B2549           #FFFFFF
+--surface-2 #232E56           #F5F1E8
+--border    #2E3A66           #E2DDD0
+--text      #F0EDE6           #1B2549
+--muted     #8B97BC           #5C6478
+
+Acentos, los mismos en los dos modos
+--orange    #E8833F   principal
+--orange-lt #F5A96E
+--orange-dk #C25A1A
+--teal      #4A9B9B
+--gold      #F5D28B
+--coral     #E5705A   caída, alertas
+--green     #6BAF7A   solo el veredicto "escalar"
 ```
 
-- **Fondo crema**, cards en blanco: las superficies son más claras que el
-  fondo, no más oscuras.
-- **Los números van en navy, no en gris.** Si la cifra pesa lo mismo que su
-  etiqueta, la pantalla se lee lavada y no hay jerarquía que valga.
-- **Las etiquetas van en `--muted`.** La cifra manda.
-- **Modo oscuro completo**, con toggle, respetando `prefers-color-scheme` por
-  defecto. Una elección explícita gana sobre la del sistema y se recuerda.
-- **En oscuro el acento pasa a `--brand-300`.** `--brand-400` no llega al
-  contraste sobre fondo oscuro.
-- Los tokens de gráfico (`--chart-fill`, `--chart-line`, `--chart-band`)
-  apuntan a stops distintos según el tema, así que los gráficos se adaptan sin
-  que ningún componente sepa qué tema está activo.
+**El naranja es la marca.** El verde tiene un único uso en toda la app —el
+veredicto "escalar" en Ads— y por eso no aparece en ninguna otra parte: si
+apareciera decorando, dejaría de significar eso.
 
 ## Color
 
@@ -94,11 +88,11 @@ significar cualquiera de las dos cosas.
 
 | Métrica | Color |
 |---|---|
-| Registros | `--sage` |
-| Pacientes nuevos | `--forest` |
+| Registros | `--orange` |
+| Pacientes nuevos | `--orange-dk` |
 | Pacientes activos | `--teal` |
 | Conversión | `--gold` |
-| CAC | `--teal-deep` |
+| CAC | `--teal` |
 | Costo por registro | `--coral` |
 | LTV | `--gold` |
 
@@ -187,6 +181,9 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
 - **Anotaciones según la serie.** Con CAC seleccionado el gráfico dibuja el LTV
   como techo: mientras la línea esté abajo, cada paciente devuelve más de lo
   que costó. Con las demás series no hay banda.
+- **Gráfico diario en el medio**, entre los dos bloques: barras apiladas por
+  día de los últimos 30 días, un color por plataforma, con leyenda. Muestra la
+  composición que el agregado mensual esconde.
 - **Línea de lectura automática** debajo del gráfico de Economía, sobre fondo
   dorado suave. Las reglas están escritas en `METRICAS.md`: una frase que el
   tablero afirma tiene que ser tan auditable como un número.
@@ -220,6 +217,57 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
 - Modo oscuro decorativo. Si se hace, que sea completo y legible, o nada.
 
 ---
+
+## Ads
+
+Tabla por campaña de la semana seleccionada. Cada fila lleva la campaña con su
+país y plataforma debajo en chico, el gasto, los registros, la conversión, el
+CAC, y el ratio actual con un mini-gráfico de su tendencia en las últimas seis
+semanas.
+
+**Cinco veredictos, no tres.** Tres obligan a opinar sobre cualquier fila,
+incluso cuando no hay con qué:
+
+| Veredicto | Condición | Color |
+|---|---|---|
+| Escalar | ratio > 1,8 | `--green` |
+| Mantener | ratio entre 1,3 y 1,8 | neutro |
+| Bajar | ratio < 1,3 | `--coral` |
+| Apagar | ratio bajo 1,0 tres semanas seguidas | `--coral`, más intenso |
+| Sin dato | muestra insuficiente | neutro, con cuántos registros faltan |
+
+- **Nunca un veredicto sobre pocos datos.** "Sin dato" dice cuántos registros
+  faltan para poder opinar, no un número bajo disfrazado de conclusión.
+- **La fila entera se tiñe suave** en Bajar y Apagar. Es la única parte de la
+  app donde el color pinta una fila completa, y se justifica porque la fila es
+  una decisión.
+- **La conversión se colorea** solo cuando está muy por debajo del promedio de
+  su plataforma y país: el número solo no dice si 4% es bueno o malo.
+- Arriba, cuatro cards: gasto semanal, pacientes nuevos, CAC medio, campañas a
+  revisar.
+- Abajo, recomendaciones en texto, una por campaña con problema u oportunidad,
+  **citando el motivo concreto**: cuántas semanas de caída, cuánto por debajo
+  del promedio, cuánto margen hay para escalar.
+- **Solo campañas con gasto o registros en el período.** Las apagadas van
+  detrás de un filtro aparte y las de volumen marginal se agrupan en "otras":
+  una tabla de cuarenta filas donde treinta son ceros no es una tabla.
+
+## Funnel
+
+Cuatro etapas en barras horizontales proporcionales: Registros → Compraron →
+1ª sesión → 2ª sesión.
+
+- **La caída va entre las barras, no adentro**, con el número absoluto y el
+  porcentaje. Es lo que se está mirando, no una anotación.
+- Cuatro cards: mediana de compra con el p80 debajo, compran en 24 h, no-show,
+  caída 1ª→2ª.
+- **Grilla de caída por cohorte**: filas los últimos seis meses, columnas los
+  pasos entre sesiones (1→2, 2→3, …), cada celda el porcentaje que no pasa al
+  siguiente paso. Más caída, color más intenso. Las celdas donde todavía no
+  pasó el tiempo van punteadas, no vacías ni en cero. Al final, una columna `n`
+  con el tamaño de la cohorte, porque un 60% sobre 5 personas no es un 60%.
+- Debajo, una línea que lee la grilla: cuál es el paso más crítico y si viene
+  mejorando.
 
 ## Test
 

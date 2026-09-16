@@ -2,13 +2,19 @@ import type { Connection } from "mysql2/promise";
 import type { Client } from "pg";
 import {
   PAISES,
+  VENTANA_CONVERSION_DIAS,
   monthRangeUtc,
   rangoParcialUtc,
   transcurridoEnMes,
   type Pais,
 } from "@/lib/queries/shared";
 import { registros, registrosPorSource } from "@/lib/queries/registros";
-import { pacientesNuevos, pacientesActivos, churn } from "@/lib/queries/pacientes";
+import {
+  pacientesNuevos,
+  pacientesActivados,
+  pacientesActivos,
+  churn,
+} from "@/lib/queries/pacientes";
 import {
   conversionCohorte,
   diasHastaPago,
@@ -34,6 +40,7 @@ type Fila = {
   plataforma: string;
   registros: number | null;
   pacientes_nuevos: number | null;
+  pacientes_activados: number | null;
   pacientes_activos: number | null;
   conversion_cohorte: number | null;
   conversion_proyectada: boolean;
@@ -140,6 +147,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
   const [
     nRegistros,
     nuevos,
+    activados,
     activos,
     cohorte,
     histPago,
@@ -151,6 +159,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
   ] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
+    pacientesActivados(mysql, rango, pais),
     pacientesActivos(mysql, rango, pais),
     conversionCohorte(mysql, mes, pais),
     diasHastaPago(mysql, mes, pais),
@@ -164,6 +173,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
   return {
     registros: nRegistros,
     nuevos,
+    activados,
     activos,
     cohorte,
     histPago,
@@ -205,6 +215,7 @@ function armarFila({
     medido.curva,
   );
 
+  const maduro = edad >= VENTANA_CONVERSION_DIAS;
   const margen = margenPonderado(medido.precios, pctComision, tipoCambio);
   const porPaciente =
     medido.porPaciente.pacientes === 0
@@ -218,12 +229,15 @@ function armarFila({
     plataforma,
     registros: medido.registros,
     pacientes_nuevos: medido.nuevos,
+    pacientes_activados: medido.activados,
     pacientes_activos: medido.activos,
     conversion_cohorte: conv.valor,
     conversion_proyectada: conv.proyectada,
     cohorte_edad_dias: edad,
-    mediana_dias_compra: percentil(medido.histPago, 0.5),
-    p80_dias_compra: percentil(medido.histPago, 0.8),
+    // The median only means something once the cohort has had its full 30
+    // days: before that it can only contain the people who paid fast.
+    mediana_dias_compra: maduro ? percentil(medido.histPago, 0.5) : null,
+    p80_dias_compra: maduro ? percentil(medido.histPago, 0.8) : null,
     gasto_usd: gastoUsd,
     cac_usd: gastoUsd === null ? null : cac(gastoUsd, medido.nuevos),
     // The LTV factors only mean something once the cohort has closed.
@@ -255,6 +269,7 @@ async function medirTramoPrevio(
   const [reg, nuevos, activos] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
+    pacientesActivados(mysql, rango, pais),
     pacientesActivos(mysql, rango, pais),
   ]);
 
@@ -308,12 +323,19 @@ function armarTotal(
     plataforma: "TODAS",
     registros: suma((m) => m.registros),
     pacientes_nuevos: nuevos,
+    pacientes_activados: suma((m) => m.activados),
     pacientes_activos: suma((m) => m.activos),
     conversion_cohorte: conv.valor,
     conversion_proyectada: conv.proyectada,
     cohorte_edad_dias: edad,
-    mediana_dias_compra: percentil(consolidar(histPago), 0.5),
-    p80_dias_compra: percentil(consolidar(histPago), 0.8),
+    mediana_dias_compra:
+      edad >= VENTANA_CONVERSION_DIAS
+        ? percentil(consolidar(histPago), 0.5)
+        : null,
+    p80_dias_compra:
+      edad >= VENTANA_CONVERSION_DIAS
+        ? percentil(consolidar(histPago), 0.8)
+        : null,
     gasto_usd: gastoUsd,
     cac_usd: gastoUsd === null ? null : cac(gastoUsd, nuevos),
     sesiones_por_paciente:
@@ -405,6 +427,7 @@ function filaVacia(
     plataforma,
     registros: null,
     pacientes_nuevos: null,
+    pacientes_activados: null,
     pacientes_activos: null,
     conversion_cohorte: null,
     conversion_proyectada: false,
@@ -429,7 +452,8 @@ function filaVacia(
 async function upsert(db: Client, fila: Fila): Promise<void> {
   await db.query(
     `insert into marketing.metricas_mensuales (
-       mes, pais, plataforma, registros, pacientes_nuevos, pacientes_activos,
+       mes, pais, plataforma, registros, pacientes_nuevos, pacientes_activados,
+       pacientes_activos,
        conversion_cohorte, conversion_proyectada, cohorte_edad_dias,
        mediana_dias_compra, p80_dias_compra, gasto_usd, cac_usd,
        sesiones_por_paciente, margen_usd_sesion, ltv_usd, cohorte_cerrada,
@@ -438,11 +462,12 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        tramo_dias, actualizado_en
      ) values (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-       $17, $18, $19, $20, $21, $22, $23, now()
+       $17, $18, $19, $20, $21, $22, $23, $24, now()
      )
      on conflict (mes, pais, plataforma) do update set
        registros = excluded.registros,
        pacientes_nuevos = excluded.pacientes_nuevos,
+       pacientes_activados = excluded.pacientes_activados,
        pacientes_activos = excluded.pacientes_activos,
        conversion_cohorte = excluded.conversion_cohorte,
        conversion_proyectada = excluded.conversion_proyectada,
@@ -468,6 +493,7 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
       fila.plataforma,
       fila.registros,
       fila.pacientes_nuevos,
+      fila.pacientes_activados,
       fila.pacientes_activos,
       fila.conversion_cohorte,
       fila.conversion_proyectada,

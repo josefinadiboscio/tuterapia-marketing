@@ -1,5 +1,11 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
-import { monthRangeUtc, PRIMER_PAGO, type Pais, type Rango } from "./shared";
+import {
+  monthRangeUtc,
+  PRIMERA_SESION,
+  PRIMER_PAGO,
+  type Pais,
+  type Rango,
+} from "./shared";
 
 /**
  * Pacientes nuevos: patients whose FIRST confirmed payment falls in the month.
@@ -22,6 +28,30 @@ export async function pacientesNuevos(
   const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
     `SELECT COUNT(*) AS n
        FROM (${PRIMER_PAGO}) f
+       JOIN login l ON l.id = f.id_paciente AND l.tipo = 1
+      WHERE l.paisDominio = ?
+        AND f.primera >= ? AND f.primera < ?`,
+    [pais, start, end],
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/**
+ * Activados: patients whose FIRST REALIZED SESSION falls in the month.
+ *
+ * Not the same as pacientes nuevos, which counts the sale. The gap between
+ * the two is the no-show: people who paid and never sat down. It belongs in
+ * Funnel, where that distance is the point, not in General.
+ */
+export async function pacientesActivados(
+  conn: Connection,
+  rango: Rango,
+  pais: Pais,
+): Promise<number> {
+  const { start, end } = rango;
+  const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
+    `SELECT COUNT(*) AS n
+       FROM (${PRIMERA_SESION}) f
        JOIN login l ON l.id = f.id_paciente AND l.tipo = 1
       WHERE l.paisDominio = ?
         AND f.primera >= ? AND f.primera < ?`,

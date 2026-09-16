@@ -54,9 +54,19 @@ function toSqlDatetime(epochMs: number): string {
   return new Date(epochMs).toISOString().slice(0, 19).replace("T", " ");
 }
 
+/** Days between two UTC datetimes, counted on local calendar days (UTC-3). */
+export function diasLocales(hasta: string, desde: string): string {
+  const h = `DATE_SUB(${hasta}, INTERVAL ${LOCAL_UTC_OFFSET_HOURS} HOUR)`;
+  const d = `DATE_SUB(${desde}, INTERVAL ${LOCAL_UTC_OFFSET_HOURS} HOUR)`;
+  return `DATEDIFF(${h}, ${d})`;
+}
+
+/** The window inside which a purchase counts as a conversion. */
+export const VENTANA_CONVERSION_DIAS = 30;
+
 /**
- * First realized session per patient. Used by several queries, always as a
- * derived table so MySQL does the grouping and we never pull the rows.
+ * First realized session per patient. Used as a derived table so MySQL does
+ * the grouping and we never pull the rows.
  */
 export const PRIMERA_SESION = `
   SELECT id_paciente, MIN(fecha) AS primera

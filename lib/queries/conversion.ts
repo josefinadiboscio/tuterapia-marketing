@@ -1,7 +1,9 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
 import {
   monthRangeUtc,
+  diasLocales,
   PRIMER_PAGO,
+  VENTANA_CONVERSION_DIAS,
   type DiasHistograma,
   type Pais,
 } from "./shared";
@@ -29,7 +31,7 @@ export async function conversionCohorte(
   >(
     `SELECT COUNT(*) AS registros,
             SUM(f.primera IS NOT NULL
-                AND f.primera < DATE_ADD(l.creacion, INTERVAL 30 DAY)) AS convertidos
+                AND f.primera < DATE_ADD(l.creacion, INTERVAL ${VENTANA_CONVERSION_DIAS} DAY)) AS convertidos
        FROM login l
        LEFT JOIN (${PRIMER_PAGO}) f ON f.id_paciente = l.id
       WHERE l.tipo = 1 AND l.paisDominio = ?
@@ -46,11 +48,17 @@ export async function conversionCohorte(
  * Días entre registro y PRIMER PAGO CONFIRMADO, as a histogram over the
  * registration cohort of the month.
  *
- * Same event the conversion counts, so the median is literally "how long the
- * half that converts takes to convert".
+ * Same event and same 30-day window as the conversion, so the median is
+ * literally "how long the half that converts takes to convert". Without the
+ * cap a recent cohort can only contain the people who paid fast, which drags
+ * its median below an older cohort's for no real reason.
+ *
+ * Days are counted on LOCAL calendar days. On UTC days, someone who registers
+ * at 20:00 and pays at 22:00 crosses midnight UTC and reads as one day — with
+ * a median of 0 and a p80 of 3, that noise is most of the signal.
  *
  * A histogram is the full distribution, so the median and p80 derived from it
- * are exact, and it works the same on MySQL 5.7 and 8.
+ * are exact, and it works the same on MariaDB and MySQL.
  */
 export async function diasHastaPago(
   conn: Connection,
@@ -61,11 +69,12 @@ export async function diasHastaPago(
   const [rows] = await conn.query<
     (RowDataPacket & { dias: number; n: number })[]
   >(
-    `SELECT DATEDIFF(p.primera, l.creacion) AS dias, COUNT(*) AS n
+    `SELECT ${diasLocales("p.primera", "l.creacion")} AS dias, COUNT(*) AS n
        FROM login l
        JOIN (${PRIMER_PAGO}) p ON p.id_paciente = l.id
       WHERE l.tipo = 1 AND l.paisDominio = ?
         AND l.creacion >= ? AND l.creacion < ?
+        AND p.primera < DATE_ADD(l.creacion, INTERVAL ${VENTANA_CONVERSION_DIAS} DAY)
       GROUP BY dias
       ORDER BY dias`,
     [pais, start, end],
@@ -77,10 +86,14 @@ export async function diasHastaPago(
  * Maturity curve for projecting young cohorts: how days-to-first-purchase are
  * distributed across cohorts old enough to be finished.
  *
- * On the purchase, like the conversion it projects. This curve is much
- * steeper than the registro-to-session one in METRICAS.md §5: the median buyer
- * pays the same day they register, so a cohort is nearly closed within a
- * couple of weeks.
+ * On the purchase, like the conversion it projects, and capped at the same 30
+ * days. The cap matters: the conversion only ever counts purchases inside the
+ * window, so a curve that also counted later ones would have a larger
+ * denominator and would inflate every projection.
+ *
+ * This curve is much steeper than the registro-to-session one in
+ * METRICAS.md §5: the median buyer pays the same day they register, so a
+ * cohort is nearly closed within a couple of weeks.
  *
  * Measured instead of hardcoded, so a shift in the curve shows up rather than
  * quietly biasing the projection.
@@ -93,13 +106,14 @@ export async function curvaConversion(
   const [rows] = await conn.query<
     (RowDataPacket & { dias: number; n: number })[]
   >(
-    `SELECT DATEDIFF(f.primera, l.creacion) AS dias, COUNT(*) AS n
+    `SELECT ${diasLocales("f.primera", "l.creacion")} AS dias, COUNT(*) AS n
        FROM login l
        JOIN (${PRIMER_PAGO}) f ON f.id_paciente = l.id
       WHERE l.tipo = 1 AND l.paisDominio = ?
         AND l.creacion >= ?
         AND l.creacion < DATE_SUB(NOW(), INTERVAL 90 DAY)
-        AND DATEDIFF(f.primera, l.creacion) >= 0
+        AND f.primera < DATE_ADD(l.creacion, INTERVAL ${VENTANA_CONVERSION_DIAS} DAY)
+        AND ${diasLocales("f.primera", "l.creacion")} >= 0
       GROUP BY dias
       ORDER BY dias`,
     [pais, desde],

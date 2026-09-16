@@ -79,6 +79,21 @@ const PROBES: Record<string, string> = {
       FROM pacientes_pagos pp JOIN login l ON l.id = pp.id_paciente
      WHERE pp.confirmado = 1 GROUP BY 1, 2 ORDER BY n DESC LIMIT 20`,
 
+  // Price per session split by tipo_session: online and presencial are not
+  // the same product and the margin follows the price.
+  precio_por_tipo_session: `
+    SELECT paisDominio AS pais, moneda,
+           COALESCE(tipo_session, '(sin dato)') AS tipo_session,
+           COUNT(*) AS pagos,
+           SUM(sesiones) AS sesiones,
+           ROUND(SUM(monto) / SUM(sesiones)) AS precio_sesion,
+           ROUND(MIN(monto / sesiones)) AS precio_min,
+           ROUND(MAX(monto / sesiones)) AS precio_max
+      FROM pacientes_pagos
+     WHERE confirmado = 1 AND monto > 0 AND sesiones > 0
+       AND creacion >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+     GROUP BY 1, 2, 3 ORDER BY pagos DESC`,
+
   // Sanity check for METRICAS.md §9: does precio x pct land near 6 / 10 USD?
   precio_sesion: `
     SELECT paisDominio AS pais, moneda, COUNT(*) AS n,

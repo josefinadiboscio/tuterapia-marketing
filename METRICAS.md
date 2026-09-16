@@ -102,8 +102,19 @@ demás. No se le resta nada más.
 El tipo de cambio a cargar es **aquel al que se convierte o gira realmente**,
 no el oficial.
 
-El precio de sesión **no es parámetro** — se deriva de la base. Todo lo que se
-pueda calcular de los datos no se configura.
+El precio de sesión **no es parámetro** — se deriva de la base como
+`monto / sesiones`. Todo lo que se pueda calcular de los datos no se
+configura.
+
+### `tipo_session` es una dimensión del precio
+
+`pacientes_pagos.tipo_session` (`online` | `presencial`) cambia el precio y por
+lo tanto el margen: no son el mismo producto. Cualquier precio promedio que no
+separe por `tipo_session` mezcla dos poblaciones y se mueve solo cuando cambia
+la proporción entre ellas, sin que haya cambiado ningún precio.
+
+La columna es nullable, así que hay una tercera categoría de hecho: los pagos
+sin dato.
 
 ---
 
@@ -205,10 +216,27 @@ el que muestra el tablero, no peor.
 | Pacientes nuevos | Pacientes con su **primer pago confirmado** en el mes | Se asignan al mes de la venta |
 | Pacientes activos | Con ≥1 sesión realizada en el mes | — |
 | Conversión | Compradores ÷ registros **de la misma cohorte de registro**, ventana **fija de 30 días** | Proyectada si < 30 días |
-| Mediana de compra | Días entre registro y **primer pago confirmado**, con p80 al lado | Disponible desde el día uno |
+| Mediana de compra | Días entre registro y **primer pago confirmado**, dentro de los 30 días, con p80 al lado | Solo cohortes de 30 días o más |
 | Churn | Activos del mes N−1 sin sesión en el mes N | Se guarda en la fila del mes N |
 | Gasto USD | Carga manual en Admin | — |
 | CAC / LTV / LTV-CAC | Ver §4 | Solo margen |
+
+### Criterios de mes: no son el mismo
+
+Tres métricas de la misma fila se agrupan por criterios distintos, y es a
+propósito:
+
+| Métrica | Se agrupa por |
+|---|---|
+| Registros | Mes de `login.creacion` |
+| Pacientes nuevos | **Mes del primer pago confirmado** |
+| Conversión y mediana de compra | **Mes de registro de la cohorte** |
+| Pacientes activos | Mes de la sesión realizada |
+
+Un paciente que se registró en marzo y compró en mayo suma a los registros de
+marzo, a los pacientes nuevos de mayo, y a la conversión y la mediana de la
+cohorte de marzo. Leer la fila de mayo como si todo hablara de mayo es el
+error más fácil de cometer con esta tabla.
 
 ### Reglas transversales
 
@@ -237,6 +265,17 @@ el que muestra el tablero, no peor.
   activos de N−1 se calcula con las sesiones de N y se guarda en N. Así entra
   en la ventana de escritura del job y no hace falta recalcular meses
   cerrados.
+- **La mediana de compra usa la misma ventana de 30 días que la conversión**, y
+  solo se muestra cuando la cohorte cumplió esos 30 días. Sin el tope, una
+  cohorte reciente solo puede contener a los que pagaron rápido y su mediana
+  queda artificialmente por debajo de una cohorte vieja.
+- **Los días se cuentan en días calendario locales (UTC−3)**, no en UTC. Quien
+  se registra a las 20:00 y paga a las 22:00 cruza la medianoche UTC y
+  contaría como un día. Con una mediana de 0 y un p80 de 3, ese ruido es la
+  mayor parte de la señal.
+- **Activados** — pacientes con su **primera sesión realizada** en el mes — se
+  guarda pero **no se muestra en General**. La brecha contra pacientes nuevos
+  es la tasa de no-show y pertenece a Funnel.
 - **La venta es el hito, no la sesión.** Un paciente es nuevo cuando compra.
   Medido contra la primera sesión realizada el número da ~6% menos (576 contra
   613 en AR, agosto 2026): la diferencia son los que ya pagaron y todavía no

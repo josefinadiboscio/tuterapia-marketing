@@ -21,14 +21,16 @@ export async function accionNuevaVigencia(formData: FormData) {
 }
 
 export async function accionGuardarGasto(formData: FormData) {
-  const mes = String(formData.get("mes"));
+  const semana = String(formData.get("semana"));
   const pais = String(formData.get("pais"));
   const canal = String(formData.get("canal")).trim();
   const monto = Number(formData.get("monto_usd"));
 
-  if (!/^\d{4}-\d{2}$/.test(mes) || !canal || !Number.isFinite(monto)) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(semana) || !canal || !Number.isFinite(monto)) {
+    return;
+  }
 
-  await guardarGasto(mes, pais, canal, monto);
+  await guardarGasto(semana, pais, canal, monto);
   revalidatePath("/admin");
 }
 

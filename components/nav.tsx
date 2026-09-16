@@ -4,6 +4,7 @@ import { fechaHora } from "@/lib/ui/format";
 import { ToggleTema } from "@/components/tema";
 import { RecordarPais } from "@/components/recordar-pais";
 import { RANGOS, type Rango } from "@/lib/dashboard";
+import { identidadDe } from "@/components/identidad";
 
 /**
  * Header shared by every tab: five real routes, not client-side tabs, so each
@@ -100,28 +101,43 @@ export function Nav({
           ))}
         </nav>
 
-        <div className="flex items-center gap-5 pb-2 text-sm">
-          <div className="flex gap-3">
+        <div className="flex items-center gap-3 pb-2 text-sm">
+          {/* Segmented controls: a selector has to look like a control, not
+              like a heading in bold. */}
+          <div className="flex items-center overflow-hidden rounded-md border border-borde">
             {PAISES_UI.map((p) => (
               <Link
                 key={p}
                 href={conContexto(activa, { ...ctx, pais: p }, extra)}
-                className={p === ctx.pais ? "text-texto" : "text-ter hover:text-texto"}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs ${
+                  p === ctx.pais
+                    ? "bg-navy text-bg"
+                    : "bg-transparent text-sec hover:text-texto"
+                }`}
               >
+                {p === ctx.pais ? (
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${
+                      identidadDe(p).punto
+                    }`}
+                  />
+                ) : null}
                 {p}
               </Link>
             ))}
           </div>
 
           {conRango ? (
-            <div className="flex gap-3 border-l border-borde pl-5">
+            <div className="flex items-center overflow-hidden rounded-md border border-borde">
               {RANGOS.map((r) => (
                 <Link
                   key={r}
                   href={conContexto(activa, { ...ctx, rango: r }, extra)}
-                  className={
-                    r === ctx.rango ? "text-texto" : "text-ter hover:text-texto"
-                  }
+                  className={`px-2.5 py-1 text-xs ${
+                    r === ctx.rango
+                      ? "bg-navy text-bg"
+                      : "bg-transparent text-sec hover:text-texto"
+                  }`}
                 >
                   {r}m
                 </Link>

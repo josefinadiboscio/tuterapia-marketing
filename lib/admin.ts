@@ -17,10 +17,11 @@ export type Parametro = {
 };
 
 export type Gasto = {
-  mes: string;
+  semana: string;
   pais: string;
   canal: string;
   monto_usd: string;
+  canal_csv: string | null;
   cargado_en: string;
 };
 
@@ -71,9 +72,9 @@ export async function leerAdmin(): Promise<VistaAdmin> {
             order by clave, pais, vigente_desde desc`,
         ),
         db.query<Gasto>(
-          `select to_char(mes, 'YYYY-MM') as mes, pais, canal,
-                  monto_usd::text, cargado_en::text
-             from marketing.gastos order by mes desc, pais, canal`,
+          `select semana::text, pais, canal, monto_usd::text, canal_csv,
+                  cargado_en::text
+             from marketing.gastos order by semana desc, pais, canal limit 60`,
         ),
         db.query<UtmMapping>(
           `select patron, plataforma, superficie, es_pago, orden
@@ -189,8 +190,9 @@ export async function nuevaVigencia(
   });
 }
 
+/** Spend is loaded by week: the month is a sum, never the unit of entry. */
 export async function guardarGasto(
-  mes: string,
+  semana: string,
   pais: string,
   canal: string,
   montoUsd: number,
@@ -198,25 +200,25 @@ export async function guardarGasto(
   await withDb(async (db) => {
     const { rows } = await db.query<{ monto_usd: string }>(
       `select monto_usd::text from marketing.gastos
-        where mes = $1 and pais = $2 and canal = $3`,
-      [`${mes}-01`, pais, canal],
+        where semana = $1 and pais = $2 and canal = $3`,
+      [semana, pais, canal],
     );
 
     await db.query(
-      `insert into marketing.gastos (mes, pais, canal, monto_usd)
+      `insert into marketing.gastos (semana, pais, canal, monto_usd)
        values ($1, $2, $3, $4)
-       on conflict (mes, pais, canal)
+       on conflict (semana, pais, canal)
        do update set monto_usd = excluded.monto_usd, cargado_en = now()`,
-      [`${mes}-01`, pais, canal, montoUsd],
+      [semana, pais, canal, montoUsd],
     );
 
     await registrar(db, {
       entidad: "gasto",
-      clave: `${mes} ${pais} ${canal}`,
+      clave: `${semana} ${pais} ${canal}`,
       campo: "monto_usd",
       anterior: rows[0]?.monto_usd ?? null,
       nuevo: String(montoUsd),
-      vigenteDesde: `${mes}-01`,
+      vigenteDesde: semana,
     });
   });
 }

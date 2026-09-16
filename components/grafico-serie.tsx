@@ -30,11 +30,14 @@ export function GraficoSerie({
   tipo,
   techos = [],
   formato,
+  identidad,
 }: {
   series: Serie[];
   tipo: "barras" | "linea";
   techos?: Techo[];
   formato: (n: number | null) => string;
+  /** Which country is on screen. An accent, never a recolouring. */
+  identidad?: { punto: string; nombre: string };
 }) {
   const valores = series.flatMap((s) =>
     s.puntos.filter((p) => p.valor !== null).map((p) => p.valor!),
@@ -72,8 +75,16 @@ export function GraficoSerie({
   // Narrow bars: a third of the slot, so the gap reads as wide as the bar.
   const anchoBarra = Math.min(paso * 0.34, 26);
 
+  const marca = identidad ? (
+    <figcaption className="flex items-center gap-1.5 text-[11px] text-ter">
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${identidad.punto}`} />
+      {identidad.nombre}
+    </figcaption>
+  ) : null;
+
   return (
     <figure className="mt-5">
+      {marca}
       <svg
         viewBox={`0 0 ${ancho} ${margenSup + alto + 28}`}
         className="h-[192px] w-full"

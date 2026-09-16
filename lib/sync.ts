@@ -577,13 +577,24 @@ async function leerParametros(
   );
 }
 
+/**
+ * Spend is stored by week, so the month is a sum.
+ *
+ * A week belongs to the month its FIRST day falls in, never split across two.
+ * The weeks start on Wednesdays, so many of them straddle a month boundary;
+ * splitting them by days would be more precise in the abstract and would stop
+ * matching the sheet this spend is planned in, which is the number anyone
+ * would check it against.
+ */
 async function leerGastos(
   db: Client,
   mes: string,
 ): Promise<Record<string, number>> {
   const { rows } = await db.query<{ pais: string; monto_usd: string }>(
     `select pais, sum(monto_usd) as monto_usd
-       from marketing.gastos where mes = $1 group by pais`,
+       from marketing.gastos
+      where semana >= $1::date and semana < ($1::date + interval '1 month')
+      group by pais`,
     [`${mes}-01`],
   );
   return Object.fromEntries(rows.map((r) => [r.pais, Number(r.monto_usd)]));

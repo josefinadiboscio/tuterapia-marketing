@@ -4,6 +4,7 @@ import { GraficoSerie, type Serie } from "@/components/grafico-serie";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
 import { entero, porcentaje, usd, SIN_DATO } from "@/lib/ui/format";
+import { identidadDe } from "@/components/identidad";
 
 export const dynamic = "force-dynamic";
 
@@ -283,6 +284,7 @@ function Bloque({
         tipo={tipo}
         techos={techos}
         formato={metrica.formato}
+        identidad={identidadDe(ctx.pais)}
       />
 
       {lectura}

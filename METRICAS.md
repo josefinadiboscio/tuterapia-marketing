@@ -433,6 +433,25 @@ específicas van primero. Cada una es una afirmación sobre dos pendientes.
 Si ninguna se cumple, no se muestra ninguna frase. **El tablero no dice nada
 antes que decir algo que no se sostiene.**
 
+### El gasto se guarda por semana
+
+`marketing.gastos` tiene grano **semanal**: `(semana, pais, canal)`. Es el
+grano al que se planifica la pauta, y agregarlo a mes al importar tira el
+detalle que Ads necesita para juzgar una campaña. Un mes se reconstruye
+sumando semanas; al revés no.
+
+- **Una semana pertenece al mes de su primer día**, nunca se parte entre dos.
+  Las semanas arrancan los miércoles, así que muchas cruzan el borde del mes.
+  Partirlas por días sería más preciso en abstracto y dejaría de coincidir con
+  la planilla donde se planifica el gasto, que es contra lo que cualquiera va
+  a chequear el número.
+- **Los canales de la planilla se mapean a las plataformas de `utm_mapping`.**
+  "Tik Tok" es TikTok y "Meta Sueños" es Meta; el nombre original queda en
+  `canal_csv` para que Ads pueda separarlos.
+- **Chile se descarta en la importación**, como en todo el resto.
+- El importador es `scripts/importar-gastos.ts` y es idempotente: agrega por
+  clave antes de escribir y hace upsert con el valor, no suma.
+
 ### Costo por registro
 
 ```

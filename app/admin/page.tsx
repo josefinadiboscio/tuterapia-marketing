@@ -20,7 +20,6 @@ export default async function Admin({
 }) {
   const ctx = await contexto(await searchParams);
   const admin = await leerAdmin();
-  const mesPorDefecto = admin.meses[0] ?? new Date().toISOString().slice(0, 7);
 
   return (
     <>
@@ -73,20 +72,14 @@ export default async function Admin({
 
         {/* Gasto */}
         <section>
-          <Etiqueta>Gasto mensual en USD</Etiqueta>
+          <Etiqueta>Gasto semanal en USD</Etiqueta>
 
           <form
             action={accionGuardarGasto}
             className="mt-3 flex flex-wrap items-end gap-3 text-sm"
           >
-            <Campo label="Mes">
-              <input
-                type="month"
-                name="mes"
-                defaultValue={mesPorDefecto}
-                required
-                className={INPUT}
-              />
+            <Campo label="Semana (primer día)">
+              <input type="date" name="semana" required className={INPUT} />
             </Campo>
             <Campo label="País">
               <select name="pais" className={INPUT}>
@@ -128,7 +121,7 @@ export default async function Admin({
             <table className="mt-5 w-full text-sm">
               <thead>
                 <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
-                  <th className="pb-1 font-normal">Mes</th>
+                  <th className="pb-1 font-normal">Semana</th>
                   <th className="pb-1 font-normal">País</th>
                   <th className="pb-1 font-normal">Canal</th>
                   <th className="pb-1 text-right font-normal">Monto</th>
@@ -137,10 +130,15 @@ export default async function Admin({
               </thead>
               <tbody className="divide-y divide-borde-suave">
                 {admin.gastos.map((g) => (
-                  <tr key={`${g.mes}-${g.pais}-${g.canal}`}>
-                    <td className="py-1.5 tabular-nums">{g.mes}</td>
+                  <tr key={`${g.semana}-${g.pais}-${g.canal}`}>
+                    <td className="py-1.5 tabular-nums">{g.semana}</td>
                     <td className="py-1.5">{g.pais}</td>
-                    <td className="py-1.5">{g.canal}</td>
+                    <td className="py-1.5">
+                      {g.canal}
+                      {g.canal_csv && g.canal_csv !== g.canal ? (
+                        <span className="ml-2 text-xs text-ter">{g.canal_csv}</span>
+                      ) : null}
+                    </td>
                     <td className="py-1.5 text-right tabular-nums">
                       {usd(Number(g.monto_usd))}
                     </td>
@@ -153,7 +151,8 @@ export default async function Admin({
             </table>
           ) : (
             <p className="mt-4 text-sm text-sec">
-              Sin gasto cargado. Cargá un mes y el CAC aparece en General.
+              Sin gasto cargado. Cargá una semana, o importá la planilla con
+              scripts/importar-gastos.ts, y el CAC aparece en General.
             </p>
           )}
         </section>

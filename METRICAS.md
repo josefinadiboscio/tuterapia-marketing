@@ -180,6 +180,32 @@ que abandona.
 Solo sobre **cohortes cerradas** (90 días). Los pacientes activos todavía no
 terminaron su ciclo; incluirlos subestima el LTV.
 
+### Dos "sesiones por paciente", que miden cosas distintas
+
+| | `sesiones_por_paciente` | `sesiones_historico` |
+|---|---|---|
+| Qué cuenta | La cohorte de registro, en sus primeros **90 días** | **Toda la vida** del paciente, base entera |
+| Denominador | Compradores de esa cohorte | Todos los que hicieron ≥1 sesión |
+| AR · UY | 3,77 · 4,46 | **8,68 · 13,63** |
+| Para qué | Es el multiplicador del LTV | Es la respuesta a "cuántas sesiones hace un paciente" |
+
+El primero **tiene** que estar acotado: sin ventana, una cohorte vieja siempre
+parece mejor solo por haber tenido más tiempo, y dejaría de ser comparable
+entre meses. El segundo **tiene** que derivar: es la antigüedad de la base y se
+mueve de a décimas por mes.
+
+En la card del LTV va el segundo, **sin `×` adelante**, porque no multiplica al
+número de arriba. 8,68 × US$ 15,61 da US$ 136, que es lo que vale un paciente
+argentino a lo largo de su vida — no los US$ 58,9 que muestra el LTV, que son
+su valor en los primeros 90 días.
+
+Si sumamos solo a los que además tienen un pago confirmado, el histórico da
+9,06 en AR y 14,33 en UY. Se eligió el denominador ancho: una sesión de promo
+o cortesía sigue siendo una sesión que el paciente hizo.
+
+**Pendiente**: con las dos cifras en la misma card, queda por decidir si el LTV
+del tablero sigue siendo el de 90 días o pasa a ser el de por vida.
+
 ### CAC
 
 ```

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { mesCorto } from "@/lib/ui/format";
+import { mesCorto, entero, porcentaje, usd } from "@/lib/ui/format";
 import { TooltipUtm, detalleDe } from "@/components/tooltip-utm";
 import type { Punto } from "@/lib/desglose";
 
@@ -32,11 +32,26 @@ export type Serie = {
 
 export type Techo = { valor: number; etiqueta: string };
 
+/**
+ * How to print a number, as a name rather than a function.
+ *
+ * This is a client component, and a function cannot cross the boundary from a
+ * server component: passing one throws at request time, which a `force-dynamic`
+ * page only finds out in production. A name serializes.
+ */
+export type FormatoId = "entero" | "porcentaje" | "usd";
+
+const FORMATO: Record<FormatoId, (n: number | null) => string> = {
+  entero: (n) => entero(n),
+  porcentaje: (n) => porcentaje(n),
+  usd: (n) => usd(n, 1),
+};
+
 export function GraficoSerie({
   series,
   tipo,
   techos = [],
-  formato,
+  formatoId,
   identidad,
   apiladas = false,
   utm = [],
@@ -45,7 +60,7 @@ export function GraficoSerie({
   series: Serie[];
   tipo: "barras" | "linea";
   techos?: Techo[];
-  formato: (n: number | null) => string;
+  formatoId: FormatoId;
   /** Which country is on screen. An accent, never a recolouring. */
   identidad?: { punto: string; nombre: string };
   /**
@@ -141,7 +156,7 @@ export function GraficoSerie({
               textAnchor="end"
               className="fill-ter text-[10px]"
             >
-              {formato(r)}
+              {FORMATO[formatoId](r)}
             </text>
           </g>
         ))}
@@ -215,7 +230,7 @@ export function GraficoSerie({
                     textAnchor="middle"
                     className="fill-sec text-[10px]"
                   >
-                    {formato(total)}
+                    {FORMATO[formatoId](total)}
                   </text>
                 </g>
               );

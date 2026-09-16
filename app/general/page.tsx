@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
-import { GraficoSerie, type Serie } from "@/components/grafico-serie";
+import {
+  GraficoSerie,
+  type Serie,
+  type FormatoId,
+} from "@/components/grafico-serie";
 import { GraficoDiario } from "@/components/grafico-diario";
 import {
   leerDesgloseDiario,
@@ -27,6 +31,7 @@ const VOLUMEN = [
     campo: (m: MesSerie) => m.pacientes_nuevos,
     tramo: (m: MesSerie) => m.pacientes_nuevos_tramo_previo,
     formato: (n: number | null) => entero(n),
+    formatoId: "entero" as const,
     unidad: "pct" as const,
     definicion:
       "Pacientes con su primer pago confirmado en el mes. Se cuentan en el mes de la venta.",
@@ -37,6 +42,7 @@ const VOLUMEN = [
     campo: (m: MesSerie) => m.registros,
     tramo: (m: MesSerie) => m.registros_tramo_previo,
     formato: (n: number | null) => entero(n),
+    formatoId: "entero" as const,
     unidad: "pct" as const,
     definicion: "Cuentas creadas en el mes, excluyendo terapeutas.",
   },
@@ -45,6 +51,7 @@ const VOLUMEN = [
     nombre: "Pacientes activos",
     campo: (m: MesSerie) => m.pacientes_activos,
     formato: (n: number | null) => entero(n),
+    formatoId: "entero" as const,
     unidad: "pct" as const,
     definicion: "Pacientes con al menos una sesión realizada en el mes.",
   },
@@ -53,6 +60,7 @@ const VOLUMEN = [
     nombre: "Conversión",
     campo: (m: MesSerie) => m.conversion_cohorte,
     formato: (n: number | null) => porcentaje(n),
+    formatoId: "porcentaje" as const,
     unidad: "pp" as const,
     definicion:
       "De los que se registraron en el mes, cuántos compraron dentro de los 30 días.",
@@ -65,6 +73,7 @@ const ECONOMIA = [
     nombre: "CAC",
     campo: (m: MesSerie) => m.cac_usd,
     formato: (n: number | null) => usd(n, 1),
+    formatoId: "usd" as const,
     unidad: "pct" as const,
     definicion:
       "Gasto de marketing del mes sobre los pacientes nuevos del mes, en dólares.",
@@ -74,6 +83,7 @@ const ECONOMIA = [
     nombre: "Costo por registro",
     campo: (m: MesSerie) => m.costo_por_registro_usd,
     formato: (n: number | null) => usd(n, 1),
+    formatoId: "usd" as const,
     unidad: "pct" as const,
     definicion:
       "Gasto del mes sobre los registros del mes. Es el precio del tráfico, antes de convertir.",
@@ -83,6 +93,7 @@ const ECONOMIA = [
     nombre: "LTV",
     campo: (m: MesSerie) => m.ltv_usd,
     formato: (n: number | null) => usd(n, 1),
+    formatoId: "usd" as const,
     unidad: "pct" as const,
     definicion:
       "Sesiones por paciente sobre cohorte cerrada, por el margen en dólares de cada sesión.",
@@ -196,6 +207,8 @@ type Metrica = {
    */
   tramo?: (m: MesSerie) => number | null;
   formato: (n: number | null) => string;
+  /** The same format, as a name: a function cannot cross into the chart. */
+  formatoId: FormatoId;
   unidad: "pct" | "pp";
   definicion: string;
 };
@@ -329,7 +342,7 @@ function Bloque({
         series={series}
         tipo={tipo}
         techos={techos}
-        formato={metrica.formato}
+        formatoId={metrica.formatoId}
         identidad={identidadDe(ctx.pais)}
         apiladas={apiladas}
         utm={clave === "vol" ? (mensual?.utm ?? []) : []}

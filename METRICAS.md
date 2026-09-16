@@ -197,6 +197,12 @@ un `utm_source` pago. Es una simplificación deliberada: mezcla adquisición
 orgánica con gasto pago, así que el CAC que muestra el tablero es más barato
 que el CAC puro de los canales pagos.
 
+**Decidido el 2026-09-16: queda así, con todos los pacientes nuevos.** La
+alternativa era contar solo los atribuidos a canal pago, que es lo que hace la
+planilla de Growth Control y da bastante más caro — julio AR, US$ 23,76 contra
+US$ 13,70. El tablero mide cuánto cuesta traer un paciente con la plata que se
+gasta, no cuánto cuesta un click, así que el denominador son todos.
+
 ### LTV / CAC
 
 Ambos en USD y sobre margen, nunca sobre facturación.

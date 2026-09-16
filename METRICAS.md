@@ -281,8 +281,11 @@ error más fácil de cometer con esta tabla.
   con N igual a lo transcurrido. Comparar un mes a medio andar contra uno
   completo pinta todo en rojo sin motivo. El tramo lo mide y lo guarda el job,
   no la UI.
-- **El tramo solo aplica a los conteos de volumen** (registros, pacientes
-  nuevos, pacientes activos). Conversión y mediana de compra siguen sin delta
+- **El tramo solo aplica a los conteos que son suma del mes** (registros y
+  pacientes nuevos). Pacientes activos queda afuera aunque la columna exista:
+  es un conteo distinto sobre una ventana, así que los primeros 15 días no
+  traen la mitad de los activos y el delta leería como una caída inventada.
+  Conversión y mediana de compra siguen sin delta
   en un mes en curso: son tasas sobre una cohorte joven, ya vienen proyectadas
   y superponerles una comparación esconde eso.
 - **El job nunca recalcula meses cerrados.** Escribe solo el mes en curso y el

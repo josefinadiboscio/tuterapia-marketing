@@ -123,9 +123,15 @@ Apuntar a alta densidad. El usuario quiere ver el mes entero sin scrollear.
 ## Estados
 
 **Una sola convención de tiempo en toda la app: lo que todavía se puede mover
-va atenuado y dice "en curso".** Nada más. Se eliminan de la UI las etiquetas
-"provisorio", "cohorte inmadura" y "proyectado": son tres nombres para la misma
-idea, y obligan a quien mira a aprender un vocabulario para leer un número.
+lleva un `·` al lado de su etiqueta y dice "en curso".** Nada más. Se eliminan
+de la UI las etiquetas "provisorio", "cohorte inmadura" y "proyectado": son
+tres nombres para la misma idea, y obligan a quien mira a aprender un
+vocabulario para leer un número.
+
+**El mes en curso no se atenúa.** Atenuarlo lo volvía difícil de leer para
+resolver un problema que ya resuelve el delta: comparado contra el mismo tramo
+del mes anterior, un mes a medio andar es un número honesto, no uno a medias.
+La marca alcanza; bajarle el contraste, no.
 
 El motivo —por qué ese número puede moverse— va en un tooltip. Es la única
 excepción a la regla de que un tooltip no guarda información: acá lo que guarda
@@ -158,11 +164,18 @@ pago confirmado", "con sesión en el mes", "ventana de 30 días". La card muestr
 el nombre de la métrica, el valor y la tendencia. La definición va en el
 tooltip, para quien la busque.
 
-**La tendencia va en palabras, no como delta contra el mes anterior:**
-"creciendo · +31% en 6m", "estable · +4% en 6m", "bajando · −1,8 pp en 6m". Un
-mes contra el anterior dice qué pasó una vez; una pendiente sobre seis meses
-cerrados dice hacia dónde va la cosa, que es la pregunta con la que se abre el
-tablero.
+**Sobre meses cerrados la tendencia va en palabras, no como delta contra el
+mes anterior:** "creciendo · +31% en 6m", "estable · +4% en 6m", "bajando ·
+−1,8 pp en 6m". Un mes contra el anterior dice qué pasó una vez; una pendiente
+sobre seis meses cerrados dice hacia dónde va la cosa, que es la pregunta con
+la que se abre el tablero.
+
+**Mientras el mes corre, esa línea se reemplaza por el delta contra el mismo
+tramo del mes anterior**, y dice contra qué compara: "↓ −7% vs. los primeros 15
+días del mes anterior". Solo en las métricas que son suma del mes —registros y
+pacientes nuevos—. Pacientes activos queda con la pendiente: es un conteo
+distinto sobre una ventana, así que medio mes no tiene la mitad de los
+pacientes y el delta leería como un derrumbe que no pasó.
 
 ## General
 
@@ -177,12 +190,14 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
   dorado suave — no al pie de la pantalla.
 - **Las cards son el selector.** Al clickear una, el gráfico de abajo muestra
   esa serie. Un gráfico por bloque, nunca dos.
-- **Selector de rango 6m / 12m / 24m** arriba, junto al de país.
+- **Selector de rango 3m / 6m / 12m** arriba, junto al de país.
 - **Anotaciones según la serie.** Con CAC seleccionado el gráfico dibuja el LTV
   como techo: mientras la línea esté abajo, cada paciente devuelve más de lo
   que costó. Con las demás series no hay banda.
 - **Gráfico diario en el medio**, entre los dos bloques: barras apiladas por
-  día de los últimos 30 días, un color por plataforma, con leyenda. Muestra la
+  día de los últimos 30 días, un color por plataforma, con leyenda. Al pasar
+  el mouse por una columna se abre el detalle de ese día: cuánto trajo cada
+  plataforma y el total, con las demás columnas atenuadas. Muestra la
   composición que el agregado mensual esconde.
 - **Línea de lectura automática** debajo del gráfico de Economía, sobre fondo
   dorado suave. Las reglas están escritas en `METRICAS.md`: una frase que el

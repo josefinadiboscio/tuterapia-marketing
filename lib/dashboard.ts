@@ -11,6 +11,11 @@ export type MesSerie = {
   costo_por_registro_usd: number | null;
   ltv_usd: number | null;
   es_provisorio: boolean;
+  /** How many days of the month the provisional row covers. */
+  tramo_dias: number | null;
+  /** The same stretch of the previous month, for a like-for-like delta. */
+  registros_tramo_previo: number | null;
+  pacientes_nuevos_tramo_previo: number | null;
 };
 
 export type VistaGeneral = {
@@ -22,7 +27,7 @@ export type VistaGeneral = {
   meses: string[];
 };
 
-export const RANGOS = [6, 12, 24] as const;
+export const RANGOS = [3, 6, 12] as const;
 export type Rango = (typeof RANGOS)[number];
 
 export const PAISES_REALES = ["AR", "UY"] as const;
@@ -49,7 +54,9 @@ export async function leerGeneral(
       db.query<MesSerie & { registros: string }>(
         `select to_char(mes, 'YYYY-MM') as mes, registros, pacientes_nuevos,
                 pacientes_activos, conversion_cohorte, cac_usd,
-                costo_por_registro_usd, ltv_usd, es_provisorio
+                costo_por_registro_usd, ltv_usd, es_provisorio,
+                tramo_dias, registros_tramo_previo,
+                pacientes_nuevos_tramo_previo
            from marketing.metricas_mensuales
           where pais = $1 and plataforma = 'TODAS'
           order by mes desc limit $2`,
@@ -75,7 +82,9 @@ export async function leerGeneral(
               const { rows } = await db.query(
                 `select to_char(mes, 'YYYY-MM') as mes, registros, pacientes_nuevos,
                         pacientes_activos, conversion_cohorte, cac_usd,
-                        costo_por_registro_usd, ltv_usd, es_provisorio
+                        costo_por_registro_usd, ltv_usd, es_provisorio,
+                tramo_dias, registros_tramo_previo,
+                pacientes_nuevos_tramo_previo
                    from marketing.metricas_mensuales
                   where pais = $1 and plataforma = 'TODAS'
                   order by mes desc limit $2`,
@@ -143,5 +152,8 @@ function normalizar(fila: Record<string, unknown>): MesSerie {
     costo_por_registro_usd: num(fila.costo_por_registro_usd),
     ltv_usd: num(fila.ltv_usd),
     es_provisorio: Boolean(fila.es_provisorio),
+    tramo_dias: num(fila.tramo_dias),
+    registros_tramo_previo: num(fila.registros_tramo_previo),
+    pacientes_nuevos_tramo_previo: num(fila.pacientes_nuevos_tramo_previo),
   };
 }

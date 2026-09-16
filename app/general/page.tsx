@@ -20,6 +20,7 @@ const VOLUMEN = [
     id: "registros",
     nombre: "Registros",
     campo: (m: MesSerie) => m.registros,
+    tramo: (m: MesSerie) => m.registros_tramo_previo,
     formato: (n: number | null) => entero(n),
     unidad: "pct" as const,
     definicion: "Cuentas creadas en el mes, excluyendo terapeutas.",
@@ -28,6 +29,7 @@ const VOLUMEN = [
     id: "nuevos",
     nombre: "Pacientes nuevos",
     campo: (m: MesSerie) => m.pacientes_nuevos,
+    tramo: (m: MesSerie) => m.pacientes_nuevos_tramo_previo,
     formato: (n: number | null) => entero(n),
     unidad: "pct" as const,
     definicion:
@@ -165,6 +167,15 @@ type Metrica = {
   id: string;
   nombre: string;
   campo: (m: MesSerie) => number | null;
+  /**
+   * The same stretch of the previous month, when the metric is a sum over the
+   * month and the comparison is therefore like for like.
+   *
+   * Pacientes activos has no reader here on purpose: it is a distinct count
+   * over a window, so half a month does not hold half the patients and the
+   * delta would read as a collapse that never happened.
+   */
+  tramo?: (m: MesSerie) => number | null;
   formato: (n: number | null) => string;
   unidad: "pct" | "pp";
   definicion: string;
@@ -335,11 +346,54 @@ function Card({
           <p className="mt-1 text-2xl text-texto">
             {metrica.formato(metrica.campo(ultimo ?? ({} as MesSerie)))}
           </p>
-          <TendenciaCard serie={cerrados} metrica={metrica} />
+          <DeltaCard ultimo={ultimo} cerrados={cerrados} metrica={metrica} />
         </>
       )}
     </Link>
   );
+}
+
+/**
+ * While the month is running, the card compares it against the same stretch of
+ * the month before rather than against a six-month slope.
+ *
+ * Half of September against all of August says the month is collapsing, which
+ * is only ever true of the calendar. Against the first fifteen days of August
+ * it says something real, so that is the comparison the card makes, and it
+ * names the stretch so nobody has to guess what it is against.
+ */
+function DeltaCard({
+  ultimo,
+  cerrados,
+  metrica,
+}: {
+  ultimo: MesSerie | undefined;
+  cerrados: MesSerie[];
+  metrica: Metrica;
+}) {
+  const previo = ultimo && metrica.tramo ? metrica.tramo(ultimo) : null;
+  const actual = ultimo ? metrica.campo(ultimo) : null;
+
+  if (
+    ultimo?.es_provisorio &&
+    previo !== null &&
+    previo > 0 &&
+    actual !== null
+  ) {
+    const cambio = actual / previo - 1;
+    const tono =
+      cambio > 0 ? "text-forest" : cambio < 0 ? "text-coral" : "text-sec";
+    const flecha = cambio > 0 ? "↑" : cambio < 0 ? "↓" : "→";
+    return (
+      <p className={`mt-1 text-xs ${tono}`}>
+        {flecha} {cambio >= 0 ? "+" : "−"}
+        {Math.abs(cambio * 100).toFixed(0)}% vs. los primeros{" "}
+        {ultimo.tramo_dias} días del mes anterior
+      </p>
+    );
+  }
+
+  return <TendenciaCard serie={cerrados} metrica={metrica} />;
 }
 
 /** No value, no trend: a dash and nothing else, never an explanation. */

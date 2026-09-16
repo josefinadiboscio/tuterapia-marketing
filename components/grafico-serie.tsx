@@ -172,7 +172,7 @@ export function GraficoSerie({
               // total and each segment is its country's share of it.
               let acumulado = 0;
               return (
-                <g key={mes.mes} opacity={mes.enCurso ? 0.4 : 1}>
+                <g key={mes.mes}>
                   {series.map((serie, si) => {
                     const valor = serie.puntos[i]?.valor;
                     if (valor === null || valor === undefined) return null;
@@ -219,7 +219,6 @@ export function GraficoSerie({
                       cy={escala(p.valor)}
                       r={2.5}
                       className={serie.relleno}
-                      opacity={p.enCurso ? 0.4 : 1}
                     />
                   ),
                 )}
@@ -232,7 +231,7 @@ export function GraficoSerie({
             x={margenIzq + i * paso + paso / 2}
             y={margenSup + alto + 15}
             textAnchor="middle"
-            className={p.enCurso ? "fill-dim text-[10px]" : "fill-ter text-[10px]"}
+            className="fill-ter text-[10px]"
           >
             {etiquetaMes(meses, i)}
             {p.enCurso ? " ·" : ""}

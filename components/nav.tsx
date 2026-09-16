@@ -17,7 +17,6 @@ export const PESTANAS = [
   { href: "/general", nombre: "General" },
   { href: "/ads", nombre: "Ads" },
   { href: "/funnel", nombre: "Funnel" },
-  { href: "/movimientos", nombre: "Movimientos" },
   { href: "/admin", nombre: "Admin" },
 ] as const;
 

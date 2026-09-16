@@ -94,6 +94,11 @@ create table marketing.parametros (
 | Parámetro | AR | UY | Cadencia |
 |---|---|---|---|
 | `pct_comision` | 0,26 | 0,30 | Casi nunca cambia |
+
+`pct_comision` es lo que la sesión **paga**, no lo que deja: el margen es el
+complemento, `1 − pct_comision`. Multiplicar por la comisión en vez de por su
+complemento dejaba el LTV en un tercio de lo que es (AR US$ 20 en vez de
+US$ 61, UY US$ 49 en vez de US$ 114).
 | `tipo_cambio` | ARS/USD | UYU/USD | Mensual, carga manual |
 
 El porcentaje es **revenue final**: ya está neto de pasarela y de todo lo
@@ -153,7 +158,7 @@ ningún precio haya cambiado.
 
 ```
 precio_sesion_local = pacientes_pagos.monto / pacientes_pagos.sesiones
-margen_usd_sesion   = precio_sesion_local × pct_comision[pais] / tipo_cambio[pais, mes]
+margen_usd_sesion   = precio_sesion_local × (1 − pct_comision[pais]) / tipo_cambio[pais, mes]
 ```
 
 Para pagos en `U$S` se omite la división por tipo de cambio.

@@ -88,6 +88,11 @@ export function churnRate(
 /**
  * Margin in USD left by one session (METRICAS.md §4).
  *
+ * `pct_comision` is what the session pays OUT — the therapist's cut — so what
+ * the business keeps is the rest. Multiplying by it instead of by its
+ * complement took 26% of the price for Argentina and 30% for Uruguay and
+ * called that the margin, which put the LTV at roughly a third of what it is.
+ *
  * A payment in `U$S` is taken as it is; a payment in `$` is divided by the
  * exchange rate of ITS OWN country, never by `moneda` alone — treating a
  * Uruguayan amount with the Argentine rate is an error of a factor near 12.
@@ -106,9 +111,10 @@ export function margenUsdSesion({
   pctComision: number;
   tipoCambio: number | null;
 }): number | null {
-  if (moneda === "U$S") return precioLocal * pctComision;
+  const retenido = 1 - pctComision;
+  if (moneda === "U$S") return precioLocal * retenido;
   if (!tipoCambio) return null;
-  return (precioLocal * pctComision) / tipoCambio;
+  return (precioLocal * retenido) / tipoCambio;
 }
 
 /**

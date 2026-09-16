@@ -201,10 +201,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // ?only=a,b runs just those probes. Running all of them returns more than
+  // fits in a log when the question is about two of them.
+  const only = new URL(request.url).searchParams.get("only");
+  const pedidas = only
+    ? only.split(",").map((n) => n.trim()).filter((n) => n in PROBES)
+    : Object.keys(PROBES);
+
   try {
     const result = await withMysql(async (conn) => {
       const out: Record<string, unknown> = {};
-      for (const [name, sql] of Object.entries(PROBES)) {
+      for (const name of pedidas) {
+        const sql = PROBES[name]!;
         const [rows] = await conn.query<RowDataPacket[]>(sql);
         out[name] = rows;
       }

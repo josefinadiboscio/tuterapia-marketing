@@ -13,25 +13,28 @@
   --orange: #e8833f;
   --orange-lt: #f5a96e;
   --orange-dk: #c25a1a;
-  --teal: #4a9b9b;
+  /* Subido desde #4a9b9b: el fondo oscuro es verde y el teal es un tono
+     vecino, así que contra navy separaba por color y contra este fondo no.
+     De 5,75 a 7,80 de contraste. */
+  --teal: #5fb5b5;
   --gold: #f5d28b;
   --coral: #e5705a;
   --green: #6baf7a;
 
-  /* Oscuro, el modo por defecto. */
-  --bg: #121a2e;
-  --surface: #1b2549;
-  --surface-2: #232e56;
-  --border: #2e3a66;
-  --text: #f0ede6;
-  --muted: #8b97bc;
+  /* Oscuro, el modo por defecto: verde muy oscuro, casi negro. */
+  --bg: #0c1410;
+  --surface: #141f19;
+  --surface-2: #1b2a22;
+  --border: #24362c;
+  --text: #edefe9;
+  --muted: #7e9188;
 
   --warn: var(--gold);
   --warn-bg: #2a2416;
   --danger: var(--coral);
   --danger-bg: #2c1b1a;
   --ok-bg: #16281c;
-  --dim: #5c6688;
+  --dim: #4f6157;
 }
 
 /* Claro, solo cuando se elige a mano. El fondo sigue siendo crema. */

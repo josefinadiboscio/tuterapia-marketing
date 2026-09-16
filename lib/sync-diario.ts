@@ -53,6 +53,16 @@ export async function sincronizarDias(
   const rango = ultimosDias(dias, ahora);
   const filas: FilaDiaria[] = [];
   const totales = new Map<string, FilaDiaria>();
+  // The campaign grain, kept unaggregated: Ads reads the platform level as the
+  // sum of its sources, so both levels come from this one table.
+  const utm: {
+    fecha: string;
+    pais: string;
+    utm_source: string;
+    registros: number | null;
+    nuevos: number | null;
+    convertidos: number | null;
+  }[] = [];
 
   for (const pais of PAISES as readonly Pais[]) {
     const [
@@ -113,6 +123,38 @@ export async function sincronizarDias(
       }
     };
 
+    const crudo = new Map<
+      string,
+      { registros: number | null; nuevos: number | null; convertidos: number | null }
+    >();
+    const tocar = (dia: string, source: string) => {
+      const clave = `${dia}|${source}`;
+      let v = crudo.get(clave);
+      if (!v) {
+        v = { registros: null, nuevos: null, convertidos: null };
+        crudo.set(clave, v);
+      }
+      return v;
+    };
+    for (const f of porSource) tocar(f.dia, f.utm_source).registros = f.n;
+    for (const f of nuevosSource) tocar(f.dia, f.utm_source).nuevos = f.n;
+    for (const f of convSource) {
+      const v = tocar(f.dia, f.utm_source);
+      v.registros = f.registros;
+      v.convertidos = f.convertidos;
+    }
+    for (const [clave, v] of crudo) {
+      const [fecha, source] = clave.split("|");
+      utm.push({
+        fecha: fecha!,
+        pais,
+        utm_source: source!,
+        registros: v.registros,
+        nuevos: v.nuevos,
+        convertidos: v.convertidos,
+      });
+    }
+
     const regPlat = new Map<string, number>();
     const nuevosPlat = new Map<string, number>();
     const activosPlat = new Map<string, number>();
@@ -159,6 +201,20 @@ export async function sincronizarDias(
 
   await transaction(db, async () => {
     for (const fila of filas) await upsert(db, fila);
+
+    for (const u of utm) {
+      await db.query(
+        `insert into marketing.metricas_utm
+           (fecha, pais, utm_source, registros, pacientes_nuevos, convertidos)
+         values ($1, $2, $3, $4, $5, $6)
+         on conflict (fecha, pais, utm_source) do update set
+           registros = excluded.registros,
+           pacientes_nuevos = excluded.pacientes_nuevos,
+           convertidos = excluded.convertidos,
+           actualizado_en = now()`,
+        [u.fecha, u.pais, u.utm_source, u.registros, u.nuevos, u.convertidos],
+      );
+    }
   });
 
   return filas.length;

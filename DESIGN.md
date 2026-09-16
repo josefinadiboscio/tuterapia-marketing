@@ -39,22 +39,31 @@ Los números son la interfaz. Se tratan con cuidado:
 **Todo el color vive en tokens CSS en `:root`. Ningún componente escribe un
 color.** Cambiar el tema es editar `app/globals.css` y nada más.
 
-**Oscuro por defecto**, con toggle a claro. El claro mantiene el fondo crema.
+**Oscuro por defecto**, con toggle a claro. El oscuro es un verde muy oscuro,
+casi negro; el claro mantiene el fondo crema.
+
+**El teal va en `#5FB5B5`, no en `#4A9B9B`.** El fondo oscuro es verde y el
+teal es un tono vecino: contra el navy anterior separaba por color, contra este
+no. El valor nuevo lleva el contraste de 5,75 a 7,80.
+
+**El toggle es un ícono bordeado**, sol o luna, y muestra a qué modo lleva el
+click, no en cuál estás. Una palabra en ese lugar se lee al revés la mitad de
+las veces.
 
 ```
 Oscuro                        Claro
---bg        #121A2E           #FDFAF6
---surface   #1B2549           #FFFFFF
---surface-2 #232E56           #F5F1E8
---border    #2E3A66           #E2DDD0
---text      #F0EDE6           #1B2549
---muted     #8B97BC           #5C6478
+--bg        #0C1410           #FDFAF6
+--surface   #141F19           #FFFFFF
+--surface-2 #1B2A22           #F5F1E8
+--border    #24362C           #E2DDD0
+--text      #EDEFE9           #1B2549
+--muted     #7E9188           #5C6478
 
 Acentos, los mismos en los dos modos
 --orange    #E8833F   principal
 --orange-lt #F5A96E
 --orange-dk #C25A1A
---teal      #4A9B9B
+--teal      #5FB5B5
 --gold      #F5D28B
 --coral     #E5705A   caída, alertas
 --green     #6BAF7A   solo el veredicto "escalar"
@@ -235,13 +244,15 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
 
 ## Ads
 
-Tabla por campaña de la semana seleccionada. Cada fila lleva la campaña con su
-país y plataforma debajo en chico, el gasto, los registros, la conversión, el
-CAC, y el ratio actual con un mini-gráfico de su tendencia en las últimas seis
-semanas.
+Dos niveles, una sola tabla, y los dos salen de `marketing.metricas_utm`: el
+nivel plataforma es la suma de sus sources, así que no pueden discrepar.
 
-**Cinco veredictos, no tres.** Tres obligan a opinar sobre cualquier fila,
-incluso cuando no hay con qué:
+**El gasto se mide por plataforma, y eso es una decisión, no una carencia.** Se
+planifica y se carga así. Por lo tanto el CAC y el ratio existen a nivel
+plataforma y simplemente no existen por campaña.
+
+**Nivel plataforma** (Meta, Google Ads, TikTok): gasto semanal, registros,
+pacientes nuevos, conversión, CAC, ratio LTV/CAC y veredicto.
 
 | Veredicto | Condición | Color |
 |---|---|---|
@@ -249,23 +260,29 @@ incluso cuando no hay con qué:
 | Mantener | ratio entre 1,3 y 1,8 | neutro |
 | Bajar | ratio < 1,3 | `--coral` |
 | Apagar | ratio bajo 1,0 tres semanas seguidas | `--coral`, más intenso |
-| Sin dato | muestra insuficiente | neutro, con cuántos registros faltan |
+| Sin dato | menos de 30 registros en la semana | neutro |
 
-- **Nunca un veredicto sobre pocos datos.** "Sin dato" dice cuántos registros
-  faltan para poder opinar, no un número bajo disfrazado de conclusión.
+**Nivel UTM**, desplegable bajo cada plataforma: registros, pacientes nuevos y
+conversión por `utm_source`. **Sin CAC, sin ratio y sin veredicto: esas celdas
+no están, no dicen "sin dato".** Un guión dice "no lo pudimos medir"; la verdad
+es que la pregunta no aplica a ese nivel.
+
+- **La alerta por UTM es de conversión, no de costo.** Una campaña se marca en
+  coral cuando convierte por debajo de dos tercios del promedio de su
+  plataforma y país, y solo con 30 registros o más. Debajo de esa muestra no se
+  marca nada: ni alerta ni veredicto.
 - **La fila entera se tiñe suave** en Bajar y Apagar. Es la única parte de la
   app donde el color pinta una fila completa, y se justifica porque la fila es
   una decisión.
-- **La conversión se colorea** solo cuando está muy por debajo del promedio de
-  su plataforma y país: el número solo no dice si 4% es bueno o malo.
-- Arriba, cuatro cards: gasto semanal, pacientes nuevos, CAC medio, campañas a
-  revisar.
-- Abajo, recomendaciones en texto, una por campaña con problema u oportunidad,
-  **citando el motivo concreto**: cuántas semanas de caída, cuánto por debajo
-  del promedio, cuánto margen hay para escalar.
-- **Solo campañas con gasto o registros en el período.** Las apagadas van
-  detrás de un filtro aparte y las de volumen marginal se agrupan en "otras":
-  una tabla de cuarenta filas donde treinta son ceros no es una tabla.
+- Arriba, cuatro cards: gasto semanal, pacientes nuevos, CAC medio, plataformas
+  a revisar.
+- **La semana abre en la última cerrada**, no en la que está corriendo: esa
+  tiene el gasto cargado y solo parte de los registros, así que todo ratio
+  adentro lee bajo por construcción.
+- Abajo, recomendaciones de dos tipos, **siempre con el número que las
+  sostiene**. De presupuesto, por plataforma, según el ratio. De campaña,
+  nombrando las que traen volumen que no convierte, con su conversión contra el
+  promedio de su plataforma.
 
 ## Funnel
 

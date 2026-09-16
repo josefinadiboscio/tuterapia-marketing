@@ -1,15 +1,8 @@
 import Link from "next/link";
 import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
-import { leerAds, type FilaAds } from "@/lib/ads";
-import {
-  veredicto,
-  faltanRegistros,
-  ETIQUETAS,
-  FONDO,
-  TONO,
-  MUESTRA_MINIMA,
-} from "@/lib/veredicto";
-import { Chispa } from "@/components/chispa";
+import { TablaAds } from "@/components/tabla-ads";
+import { leerAds, MUESTRA_MINIMA, type FilaPlataforma } from "@/lib/ads";
+import { veredicto, type Veredicto } from "@/lib/veredicto";
 import { entero, usd, porcentaje, fecha, SIN_DATO } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +16,7 @@ export default async function Ads({
   const ctx = await contexto(params);
   const vista = await leerAds(ctx.pais, params.semana);
 
-  const conVeredicto = vista.filas.map((f) => ({
+  const filas = vista.filas.map((f) => ({
     ...f,
     veredicto: veredicto({
       ratio: f.ratio,
@@ -32,7 +25,7 @@ export default async function Ads({
     }),
   }));
 
-  const aRevisar = conVeredicto.filter(
+  const aRevisar = filas.filter(
     (f) => f.veredicto === "bajar" || f.veredicto === "apagar",
   ).length;
 
@@ -70,86 +63,19 @@ export default async function Ads({
               <Resumen titulo="Gasto semanal" valor={usd(vista.totalGasto)} />
               <Resumen
                 titulo="Pacientes nuevos"
-                valor={SIN_DATO}
-                falta="por plataforma"
+                valor={entero(vista.totalNuevos)}
               />
-              <Resumen titulo="CAC medio" valor={SIN_DATO} falta="sin nuevos por plataforma" />
-              <Resumen titulo="Campañas a revisar" valor={entero(aRevisar)} />
+              <Resumen titulo="CAC medio" valor={usd(vista.cacMedio, 1)} />
+              <Resumen titulo="Plataformas a revisar" valor={entero(aRevisar)} />
             </section>
 
-            <table className="mt-8 w-full text-sm">
-              <thead>
-                <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
-                  <th className="pb-2 font-normal">Campaña</th>
-                  <th className="pb-2 text-right font-normal">Gasto</th>
-                  <th className="pb-2 text-right font-normal">Registros</th>
-                  <th className="pb-2 text-right font-normal">Conversión</th>
-                  <th className="pb-2 text-right font-normal">CAC</th>
-                  <th className="pb-2 text-right font-normal">Ratio 6 sem.</th>
-                  <th className="pb-2 text-right font-normal">Decisión</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-borde">
-                {conVeredicto.map((f) => (
-                  <tr key={`${f.pais}-${f.campana}`} className={FONDO[f.veredicto]}>
-                    <td className="py-2">
-                      <div>{f.campana}</div>
-                      <div className="text-xs text-ter">
-                        {f.pais} · {f.plataforma}
-                      </div>
-                    </td>
-                    <td className="py-2 text-right">{usd(f.gasto)}</td>
-                    <td className="py-2 text-right">{entero(f.registros)}</td>
-                    <td className="py-2 text-right">{porcentaje(f.conversion)}</td>
-                    <td className="py-2 text-right">{usd(f.cac, 1)}</td>
-                    <td className="py-2 text-right">
-                      <span className="inline-flex items-center gap-2">
-                        <Chispa valores={f.historia} />
-                        <span className="w-9 text-right">
-                          {f.ratio === null ? SIN_DATO : f.ratio.toFixed(2)}
-                        </span>
-                      </span>
-                    </td>
-                    <td className={`py-2 text-right ${TONO[f.veredicto]}`}>
-                      {ETIQUETAS[f.veredicto]}
-                      {f.veredicto === "sin_dato" &&
-                      f.registros !== null &&
-                      faltanRegistros(f.registros) > 0 ? (
-                        <div className="text-xs text-ter">
-                          faltan {entero(faltanRegistros(f.registros))} registros
-                        </div>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <TablaAds filas={filas} />
 
             <section className="mt-8">
               <h2 className="text-xs uppercase tracking-wide text-ter">
                 Recomendaciones
               </h2>
-              <p className="mt-2 border-l-2 border-gold bg-warn-bg px-3 py-2 text-sm">
-                Todas las campañas están en «sin dato»: hace falta el CAC y el
-                ratio por campaña para dar un veredicto, y hoy no existen. El
-                gasto está cargado por plataforma, no por campaña, y los
-                pacientes nuevos por plataforma no se calculan. Con menos de{" "}
-                {MUESTRA_MINIMA} registros tampoco se opina.
-              </p>
-              <ul className="mt-3 space-y-1.5 text-sm text-sec">
-                <li>
-                  Falta: gasto por campaña, no por canal — hoy la planilla trae
-                  Meta, Google Ads y TikTok, sin el `utm_source` de cada
-                  campaña.
-                </li>
-                <li>
-                  Falta: pacientes nuevos y conversión por plataforma en el
-                  grano diario. Hoy esas filas llevan solo registros.
-                </li>
-                <li>
-                  Falta: LTV por plataforma, que es el numerador del ratio.
-                </li>
-              </ul>
+              <Recomendaciones filas={filas} />
             </section>
           </>
         )}
@@ -158,20 +84,98 @@ export default async function Ads({
   );
 }
 
-function Resumen({
-  titulo,
-  valor,
-  falta,
+/**
+ * Two kinds of recommendation, because the two levels answer different
+ * questions: what to do with the budget, and which campaign is bringing
+ * traffic that does not convert.
+ *
+ * Every line carries the number it rests on. "Bajar Meta" is an instruction;
+ * "Meta devuelve 1,12 por dólar" is a reason.
+ */
+function Recomendaciones({
+  filas,
 }: {
-  titulo: string;
-  valor: string;
-  falta?: string;
+  filas: (FilaPlataforma & { veredicto: Veredicto })[];
 }) {
+  const presupuesto = filas
+    .filter((f) => f.ratio !== null && f.veredicto !== "sin_dato")
+    .map((f) => {
+      const ratio = f.ratio!.toFixed(2);
+      const donde = `${f.plataforma} · ${f.pais}`;
+      if (f.veredicto === "escalar") {
+        return `Subir ${donde}: devuelve US$ ${ratio} por dólar, con un CAC de ${usd(f.cac, 1)} contra un LTV de ${usd(f.ratio! * f.cac!, 1)}.`;
+      }
+      if (f.veredicto === "apagar") {
+        return `Apagar ${donde}: lleva tres semanas devolviendo menos de lo que cuesta, hoy US$ ${ratio}.`;
+      }
+      if (f.veredicto === "bajar") {
+        return `Bajar ${donde}: devuelve US$ ${ratio} por dólar, por debajo de 1,30.`;
+      }
+      return `Mantener ${donde}: US$ ${ratio} por dólar, dentro de la banda.`;
+    });
+
+  // A campaign is worth naming when it brings volume that does not convert:
+  // the fix is the campaign, not the budget of the whole platform.
+  const campanas = filas.flatMap((f) =>
+    f.campanas
+      .filter((c) => c.alerta)
+      .map(
+        (c) =>
+          `${c.utm_source} trae ${entero(c.registros)} registros en ${f.plataforma} · ${f.pais} y convierte ${porcentaje(c.conversion)}, contra ${porcentaje(f.conversion)} de la plataforma.`,
+      ),
+  );
+
+  const sinMuestra = filas.filter((f) => f.veredicto === "sin_dato");
+
+  return (
+    <>
+      {presupuesto.length > 0 ? (
+        <>
+          <h3 className="mt-3 text-xs text-sec">Presupuesto por plataforma</h3>
+          <ul className="mt-1.5 space-y-1.5 text-sm text-sec">
+            {presupuesto.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {campanas.length > 0 ? (
+        <>
+          <h3 className="mt-5 text-xs text-sec">Campañas que no convierten</h3>
+          <ul className="mt-1.5 space-y-1.5 text-sm text-sec">
+            {campanas.map((t) => (
+              <li key={t} className="border-l-2 border-coral pl-3">
+                {t}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {sinMuestra.length > 0 ? (
+        <p className="mt-5 text-xs text-ter">
+          Sin veredicto por muestra chica, con menos de {MUESTRA_MINIMA}{" "}
+          registros en la semana:{" "}
+          {sinMuestra.map((f) => `${f.plataforma} · ${f.pais}`).join(", ")}.
+        </p>
+      ) : null}
+
+      {presupuesto.length === 0 && campanas.length === 0 ? (
+        <p className="mt-2 text-sm text-sec">
+          Nada para decidir esta semana: ninguna plataforma llega a la muestra
+          mínima de {MUESTRA_MINIMA} registros.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function Resumen({ titulo, valor }: { titulo: string; valor: string }) {
   return (
     <div className="rounded-lg border border-borde bg-surface px-4 py-3">
       <p className="text-xs text-sec">{titulo}</p>
-      <p className="mt-1 text-2xl text-texto">{valor}</p>
-      {falta ? <p className="mt-0.5 text-xs text-ter">{falta}</p> : null}
+      <p className="mt-1 text-2xl text-texto">{valor || SIN_DATO}</p>
     </div>
   );
 }

@@ -32,17 +32,54 @@ export function ToggleTema() {
   }
 
   const siguiente: Record<Tema, Tema> = { oscuro: "claro", claro: "oscuro" };
-  const etiqueta: Record<Tema, string> = { oscuro: "Oscuro", claro: "Claro" };
 
+  // The icon shows what a click switches TO, not what is on: a sun on the dark
+  // theme reads as "go to light". A word said the opposite thing in the same
+  // spot and was read backwards as often as not.
   return (
     <button
       type="button"
       onClick={() => cambiar(siguiente[tema])}
-      className="text-ter hover:text-texto"
-      title="Cambiar entre oscuro y claro"
+      className="flex h-7 w-7 items-center justify-center rounded-full border border-borde bg-surface text-sec transition-colors hover:border-sec hover:text-texto"
+      title={tema === "oscuro" ? "Cambiar a claro" : "Cambiar a oscuro"}
+      aria-label={tema === "oscuro" ? "Cambiar a claro" : "Cambiar a oscuro"}
     >
-      {etiqueta[tema]}
+      {tema === "oscuro" ? <Sol /> : <Luna />}
     </button>
+  );
+}
+
+function Sol() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.8" />
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+        <line
+          key={a}
+          x1="12"
+          y1="2.4"
+          x2="12"
+          y2="5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          transform={`rotate(${a} 12 12)`}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function Luna() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Nav, contexto } from "@/components/nav";
+import { Nav, Selectores, contexto } from "@/components/nav";
 import { Pendiente } from "@/components/pendiente";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export default async function Funnel({
   return (
     <>
       <Nav activa="/funnel" ctx={ctx} />
+      <Selectores activa="/funnel" ctx={ctx} />
       <Pendiente
         titulo="Funnel"
         contenido={[

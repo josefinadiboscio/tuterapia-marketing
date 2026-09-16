@@ -1,4 +1,4 @@
-import { Nav, contexto } from "@/components/nav";
+import { Nav, Selectores, contexto } from "@/components/nav";
 import { Pendiente } from "@/components/pendiente";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ export default async function Ads({
   return (
     <>
       <Nav activa="/ads" ctx={ctx} />
+      <Selectores activa="/ads" ctx={ctx} />
       <Pendiente
         titulo="Ads"
         contenido={[

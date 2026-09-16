@@ -56,23 +56,22 @@ export function conContexto(
 export function Nav({
   activa,
   ctx,
-  conRango = false,
-  extra = {},
   ultimaSync,
 }: {
   activa: string;
   ctx: Contexto;
-  conRango?: boolean;
-  extra?: Record<string, string>;
   ultimaSync?: { corrida_en: string; error: string | null } | null;
 }) {
   return (
     <header className="border-b border-borde">
       <RecordarPais pais={ctx.pais} />
 
-      <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-x-6 gap-y-2 px-6 pt-5">
+      {/* The sync stamp sits alone in the top margin: it is a status, not a
+          control, and it was competing with the selectors for the same
+          corner. */}
+      <div className="mx-auto flex max-w-6xl items-baseline justify-between gap-6 px-6 pt-4">
         <h1 className="text-sm font-medium">Tu Terapia · Marketing</h1>
-        <div className="flex items-baseline gap-5 text-xs text-ter">
+        <div className="flex items-baseline gap-4 text-[11px] text-ter">
           <span>
             {ultimaSync
               ? `Última sincronización ${fechaHora(ultimaSync.corrida_en)}${
@@ -84,68 +83,79 @@ export function Nav({
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pt-3">
-        <nav className="flex gap-5 text-sm">
-          {PESTANAS.map((p) => (
+      <nav className="mx-auto flex max-w-6xl gap-5 px-6 pt-3 text-sm">
+        {PESTANAS.map((p) => (
+          <Link
+            key={p.href}
+            href={conContexto(p.href, ctx)}
+            className={
+              p.href === activa
+                ? "-mb-px border-b-2 border-acento pb-2 text-texto"
+                : "-mb-px border-b-2 border-transparent pb-2 text-sec hover:text-texto"
+            }
+          >
+            {p.nombre}
+          </Link>
+        ))}
+      </nav>
+    </header>
+  );
+}
+
+/** The selectors open the screen, on their own row under the tabs. */
+export function Selectores({
+  activa,
+  ctx,
+  conRango = false,
+  extra = {},
+}: {
+  activa: string;
+  ctx: Contexto;
+  conRango?: boolean;
+  extra?: Record<string, string>;
+}) {
+  return (
+    <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-6 pt-5">
+      <div className="flex items-center overflow-hidden rounded-md border border-borde">
+        {PAISES_UI.map((p) => (
+          <Link
+            key={p}
+            href={conContexto(activa, { ...ctx, pais: p }, extra)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs ${
+              p === ctx.pais
+                ? "bg-navy text-bg"
+                : "bg-transparent text-sec hover:text-texto"
+            }`}
+          >
+            {p === ctx.pais ? (
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${
+                  identidadDe(p).punto
+                }`}
+              />
+            ) : null}
+            {p}
+          </Link>
+        ))}
+      </div>
+
+      {conRango ? (
+        <div className="flex items-center overflow-hidden rounded-md border border-borde">
+          {RANGOS.map((r) => (
             <Link
-              key={p.href}
-              href={conContexto(p.href, ctx)}
-              className={
-                p.href === activa
-                  ? "-mb-px border-b-2 border-acento pb-2 text-texto"
-                  : "-mb-px border-b-2 border-transparent pb-2 text-sec hover:text-texto"
-              }
+              key={r}
+              href={conContexto(activa, { ...ctx, rango: r }, extra)}
+              className={`px-2.5 py-1 text-xs ${
+                r === ctx.rango
+                  ? "bg-navy text-bg"
+                  : "bg-transparent text-sec hover:text-texto"
+              }`}
             >
-              {p.nombre}
+              {r}m
             </Link>
           ))}
-        </nav>
-
-        <div className="flex items-center gap-3 pb-2 text-sm">
-          {/* Segmented controls: a selector has to look like a control, not
-              like a heading in bold. */}
-          <div className="flex items-center overflow-hidden rounded-md border border-borde">
-            {PAISES_UI.map((p) => (
-              <Link
-                key={p}
-                href={conContexto(activa, { ...ctx, pais: p }, extra)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs ${
-                  p === ctx.pais
-                    ? "bg-navy text-bg"
-                    : "bg-transparent text-sec hover:text-texto"
-                }`}
-              >
-                {p === ctx.pais ? (
-                  <span
-                    className={`inline-block h-1.5 w-1.5 rounded-full ${
-                      identidadDe(p).punto
-                    }`}
-                  />
-                ) : null}
-                {p}
-              </Link>
-            ))}
-          </div>
-
-          {conRango ? (
-            <div className="flex items-center overflow-hidden rounded-md border border-borde">
-              {RANGOS.map((r) => (
-                <Link
-                  key={r}
-                  href={conContexto(activa, { ...ctx, rango: r }, extra)}
-                  className={`px-2.5 py-1 text-xs ${
-                    r === ctx.rango
-                      ? "bg-navy text-bg"
-                      : "bg-transparent text-sec hover:text-texto"
-                  }`}
-                >
-                  {r}m
-                </Link>
-              ))}
-            </div>
-          ) : null}
         </div>
-      </div>
-    </header>
+      ) : null}
+    </div>
   );
 }

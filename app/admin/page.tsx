@@ -1,4 +1,4 @@
-import { Nav, contexto } from "@/components/nav";
+import { Nav, Selectores, contexto } from "@/components/nav";
 import { leerAdmin } from "@/lib/admin";
 import { entero, usd, fecha, fechaHora, nombreDeMes } from "@/lib/ui/format";
 import {
@@ -24,6 +24,7 @@ export default async function Admin({
   return (
     <>
       <Nav activa="/admin" ctx={ctx} />
+      <Selectores activa="/admin" ctx={ctx} />
 
       <main className="mx-auto max-w-5xl space-y-10 px-6 py-8">
         {/* Alerts first: they are the reason to open this screen. */}

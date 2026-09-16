@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { Nav, contexto, conContexto } from "@/components/nav";
+import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
 import { GraficoSerie, type Serie } from "@/components/grafico-serie";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
 import { entero, porcentaje, usd, SIN_DATO } from "@/lib/ui/format";
-import { identidadDe } from "@/components/identidad";
+import { identidadDe, colorDe } from "@/components/identidad";
 
 export const dynamic = "force-dynamic";
 
@@ -99,15 +99,10 @@ export default async function General({
 
   return (
     <>
-      <Nav
-        activa="/general"
-        ctx={ctx}
-        conRango
-        extra={extra}
-        ultimaSync={vista.ultimaSync}
-      />
+      <Nav activa="/general" ctx={ctx} ultimaSync={vista.ultimaSync} />
+      <Selectores activa="/general" ctx={ctx} conRango extra={extra} />
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-6 pb-8 pt-6">
         {vista.serie.length === 0 ? (
           <p className="text-sm text-sec">
             No hay datos sincronizados para {ctx.pais}. Corré el job y volvé.
@@ -124,6 +119,7 @@ export default async function General({
               serie={vista.serie}
               cerrados={cerrados}
               tipo="barras"
+              porPais={vista.porPais}
             />
 
             <Bloque
@@ -220,30 +216,40 @@ function Bloque({
   const metrica = metricas.find((m) => m.id === seleccionada)!;
   const dividido = clave === "eco" && porPais.length > 0;
 
-  // Volume speaks green, economy speaks teal: two questions, two families.
-  const familia =
-    clave === "vol"
-      ? { trazo: "stroke-sage", relleno: "fill-sage" }
-      : { trazo: "stroke-teal", relleno: "fill-teal" };
-  const borde = clave === "vol" ? "border-sage" : "border-teal";
-  const segunda =
-    clave === "vol"
-      ? { trazo: "stroke-sage-light", relleno: "fill-sage-light" }
-      : { trazo: "stroke-teal-deep", relleno: "fill-teal-deep" };
+  // The metric carries its colour from its card into the chart.
+  const color = colorDe(metrica.id);
+  const borde = color.borde;
 
-  const series: Serie[] = dividido
-    ? porPais.map((p, i) => ({
+  // A rate cannot be stacked: adding 8,7% to 12,5% is not a number. Counts
+  // stack by country so the composition of the total stays visible.
+  const apilable = metrica.unidad === "pct";
+  const porPaises = clave === "vol" ? porPais : [];
+  const apiladas = apilable && porPaises.length > 1;
+
+  const series: Serie[] = apiladas
+    ? porPaises.map((p, i) => ({
         nombre: p.pais,
         puntos: aPuntos(p.serie, metrica),
-        ...(i === 0 ? familia : segunda),
+        trazo: color.trazo,
+        relleno: color.relleno,
+        atenuada: i > 0,
       }))
-    : [
-        {
-          nombre: metrica.nombre,
-          puntos: aPuntos(serie, metrica),
-          ...familia,
-        },
-      ];
+    : dividido
+      ? porPais.map((p, i) => ({
+          nombre: p.pais,
+          puntos: aPuntos(p.serie, metrica),
+          trazo: color.trazo,
+          relleno: color.relleno,
+          atenuada: i > 0,
+        }))
+      : [
+          {
+            nombre: metrica.nombre,
+            puntos: aPuntos(serie, metrica),
+            trazo: color.trazo,
+            relleno: color.relleno,
+          },
+        ];
 
   const techos = techoLtv
     ? (dividido ? porPais : [{ pais: ctx.pais, serie }])
@@ -285,6 +291,7 @@ function Bloque({
         techos={techos}
         formato={metrica.formato}
         identidad={identidadDe(ctx.pais)}
+        apiladas={apiladas}
       />
 
       {lectura}
@@ -398,6 +405,14 @@ function TendenciaTexto({ t, prefijo }: { t: Tendencia; prefijo?: string }) {
   );
 }
 
+/**
+ * The sentence reads the same series the cards show.
+ *
+ * Volume adds across countries, so it reads the TOTAL row. Economy does not:
+ * with TOTAL selected the cards show each country separately, so the sentence
+ * takes the first one and says whose numbers it is talking about. Reading a
+ * blended CAC would be the average this dashboard refuses to show.
+ */
 function Lectura({
   vista,
   cerrados,
@@ -405,21 +420,30 @@ function Lectura({
   vista: VistaGeneral;
   cerrados: MesSerie[];
 }) {
+  const economia = vista.porPais[0]?.serie ?? vista.serie;
+  const prefijo = vista.porPais.length > 0 ? `${vista.porPais[0]!.pais} · ` : "";
+
   const ultimos = cerrados.slice(-MESES_TENDENCIA);
+  const ultimosEco = economia
+    .filter((m) => !m.es_provisorio)
+    .slice(-MESES_TENDENCIA);
+
   const t = (campo: (m: MesSerie) => number | null, unidad: "pct" | "pp") =>
     tendencia(ultimos.map(campo), unidad);
+  const te = (campo: (m: MesSerie) => number | null) =>
+    tendencia(ultimosEco.map(campo), "pct");
 
-  const ltv = ultimoValor(vista.serie, (m) => m.ltv_usd);
-  const cac = ultimoValor(vista.serie, (m) => m.cac_usd);
+  const ltv = ultimoValor(economia, (m) => m.ltv_usd);
+  const cac = ultimoValor(economia, (m) => m.cac_usd);
 
   const texto = lectura({
     conversion: t((m) => m.conversion_cohorte, "pp"),
     registros: t((m) => m.registros, "pct"),
     nuevos: t((m) => m.pacientes_nuevos, "pct"),
     activos: t((m) => m.pacientes_activos, "pct"),
-    cac: t((m) => m.cac_usd, "pct"),
-    costoRegistro: t((m) => m.costo_por_registro_usd, "pct"),
-    ltv: t((m) => m.ltv_usd, "pct"),
+    cac: te((m) => m.cac_usd),
+    costoRegistro: te((m) => m.costo_por_registro_usd),
+    ltv: te((m) => m.ltv_usd),
     ltvSobreCac: ltv !== null && cac !== null && cac > 0 ? ltv / cac : null,
   });
 
@@ -427,6 +451,7 @@ function Lectura({
 
   return (
     <p className="mt-4 border-l-2 border-gold bg-gold-soft px-3 py-2 text-sm text-texto">
+      {prefijo}
       {texto}
     </p>
   );

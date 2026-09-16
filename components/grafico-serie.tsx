@@ -18,9 +18,11 @@ export type PuntoSerie = { mes: string; valor: number | null; enCurso: boolean }
 export type Serie = {
   nombre: string;
   puntos: PuntoSerie[];
-  /** Classes from the block's colour family, never a loose colour. */
+  /** The metric's own colour, the same one its card carries. */
   trazo: string;
   relleno: string;
+  /** A second country is drawn lighter, in the same colour. */
+  atenuada?: boolean;
 };
 
 export type Techo = { valor: number; etiqueta: string };
@@ -31,6 +33,7 @@ export function GraficoSerie({
   techos = [],
   formato,
   identidad,
+  apiladas = false,
 }: {
   series: Serie[];
   tipo: "barras" | "linea";
@@ -38,6 +41,11 @@ export function GraficoSerie({
   formato: (n: number | null) => string;
   /** Which country is on screen. An accent, never a recolouring. */
   identidad?: { punto: string; nombre: string };
+  /**
+   * Stack the countries instead of drawing them side by side. Only for
+   * counts: stacking a rate would add two percentages, which is not a number.
+   */
+  apiladas?: boolean;
 }) {
   const valores = series.flatMap((s) =>
     s.puntos.filter((p) => p.valor !== null).map((p) => p.valor!),
@@ -54,7 +62,14 @@ export function GraficoSerie({
   }
 
   const meses = series[0]!.puntos;
-  const maximo = Math.max(...valores, ...techos.map((t) => t.valor));
+  const maximo = apiladas
+    ? Math.max(
+        ...meses.map((_, i) =>
+          series.reduce((a, s) => a + (s.puntos[i]?.valor ?? 0), 0),
+        ),
+        ...techos.map((t) => t.valor),
+      )
+    : Math.max(...valores, ...techos.map((t) => t.valor));
   const referencias = escalaY(maximo);
   const tope = referencias[referencias.length - 1]!;
 
@@ -145,32 +160,48 @@ export function GraficoSerie({
         ))}
 
         {tipo === "barras"
-          ? series.flatMap((serie, si) =>
-              serie.puntos.map((p, i) => {
-                if (p.valor === null) return null;
-                const centro = margenIzq + i * paso + paso / 2;
-                const y = escala(p.valor);
-                return (
-                  <g key={`${si}-${p.mes}`} opacity={p.enCurso ? 0.4 : 1}>
-                    <rect
-                      x={centro - anchoBarra / 2}
-                      y={y}
-                      width={anchoBarra}
-                      height={margenSup + alto - y}
-                      className={serie.relleno}
-                    />
-                    <text
-                      x={centro}
-                      y={y - 5}
-                      textAnchor="middle"
-                      className="fill-sec text-[10px]"
-                    >
-                      {formato(p.valor)}
-                    </text>
-                  </g>
-                );
-              }),
-            )
+          ? meses.map((mes, i) => {
+              const centro = margenIzq + i * paso + paso / 2;
+              const total = series.reduce(
+                (a, serie) => a + (serie.puntos[i]?.valor ?? 0),
+                0,
+              );
+              if (total === 0) return null;
+
+              // Stacked from the baseline up, so the bar's height is the
+              // total and each segment is its country's share of it.
+              let acumulado = 0;
+              return (
+                <g key={mes.mes} opacity={mes.enCurso ? 0.4 : 1}>
+                  {series.map((serie, si) => {
+                    const valor = serie.puntos[i]?.valor;
+                    if (valor === null || valor === undefined) return null;
+                    const base = escala(acumulado);
+                    acumulado += valor;
+                    const tope = escala(acumulado);
+                    return (
+                      <rect
+                        key={si}
+                        x={centro - anchoBarra / 2}
+                        y={tope}
+                        width={anchoBarra}
+                        height={base - tope}
+                        className={serie.relleno}
+                        opacity={serie.atenuada ? 0.5 : 1}
+                      />
+                    );
+                  })}
+                  <text
+                    x={centro}
+                    y={escala(total) - 5}
+                    textAnchor="middle"
+                    className="fill-sec text-[10px]"
+                  >
+                    {formato(total)}
+                  </text>
+                </g>
+              );
+            })
           : series.map((serie, si) => (
               <g key={si}>
                 <path
@@ -178,6 +209,7 @@ export function GraficoSerie({
                   fill="none"
                   strokeWidth={1.75}
                   className={serie.trazo}
+                  opacity={serie.atenuada ? 0.5 : 1}
                 />
                 {serie.puntos.map((p, i) =>
                   p.valor === null ? null : (
@@ -219,7 +251,10 @@ export function GraficoSerie({
         <div className="mt-1 flex flex-wrap gap-x-5 text-[11px] text-ter">
           {series.map((s) => (
             <span key={s.nombre} className="flex items-center gap-1.5">
-              <span className={`inline-block h-0.5 w-4 ${s.relleno}`} />
+              <span
+              className={`inline-block h-2 w-2 rounded-sm ${s.relleno.replace("fill-", "bg-")}`}
+              style={s.atenuada ? { opacity: 0.5 } : undefined}
+            />
               {s.nombre}
             </span>
           ))}

@@ -1,4 +1,4 @@
-import { Nav, contexto } from "@/components/nav";
+import { Nav, Selectores, contexto } from "@/components/nav";
 import { Pendiente } from "@/components/pendiente";
 import { SerieRegistros } from "@/components/serie-registros";
 import { leerMovimientos, type Resumen } from "@/lib/movimientos";
@@ -18,6 +18,8 @@ export default async function Movimientos({
     return (
       <>
         <Nav activa="/movimientos" ctx={ctx} />
+        <Selectores activa="/movimientos" ctx={ctx} />
+      <Selectores activa="/movimientos" ctx={ctx} />
         <Pendiente
           titulo="Movimientos"
           contenido={[
@@ -41,6 +43,7 @@ export default async function Movimientos({
   return (
     <>
       <Nav activa="/movimientos" ctx={ctx} />
+      <Selectores activa="/movimientos" ctx={ctx} />
 
       <main className="mx-auto max-w-5xl px-6 py-8">
         <p className="text-xs text-sec">

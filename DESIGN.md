@@ -88,13 +88,25 @@ significar cualquiera de las dos cosas.
 | Todo lo demás | neutro |
 
 - Nada de gradientes, glassmorphism, sombras de colores ni fondos decorativos.
-- **Cada bloque tiene su familia de color.** Volumen usa la familia verde
-  (`--sage`, `--sage-light`); Economía usa la teal (`--teal`, `--teal-deep`).
-  Son dos familias distintas porque son dos preguntas distintas, y mirar un
-  gráfico tiene que decir de cuál de las dos se está hablando antes de leer el
-  título.
-- Dentro de un bloque, las series usan tonos de **su** familia, no colores
-  sueltos. `--coral` queda para una serie secundaria cuando hacen falta tres.
+- **Cada métrica tiene su color, y lo lleva a todos lados.** El borde de su
+  card y las barras o la línea de su gráfico son el mismo color, así que se
+  sabe qué serie se está mirando sin leer la etiqueta.
+
+| Métrica | Color |
+|---|---|
+| Registros | `--sage` |
+| Pacientes nuevos | `--forest` |
+| Pacientes activos | `--teal` |
+| Conversión | `--gold` |
+| CAC | `--teal-deep` |
+| Costo por registro | `--coral` |
+| LTV | `--gold` |
+
+- **Con Total seleccionado, las barras se apilan por país**: el país principal
+  en el tono de la métrica y el segundo en una versión más clara, con leyenda.
+  Una barra plana esconde la composición, que es información.
+- **Las tasas no se apilan.** Sumar 8,7% de Argentina con 12,5% de Uruguay no
+  da nada. Conversión se dibuja como barra única con el valor del Total.
 - **El color nunca es el único portador de información.** La tendencia de una
   card la dan la palabra y la flecha; el color, si está, acompaña.
 
@@ -180,6 +192,10 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
   tablero afirma tiene que ser tan auditable como un número.
 - **El selector de país arranca en Total** y recuerda la última elección entre
   visitas.
+- **Los selectores de país y rango abren la pantalla**, en su propia fila
+  debajo de las pestañas y alineados a la izquierda. La fecha de
+  sincronización es un estado, no un control: va sola en el margen superior
+  derecho, en gris chico.
 
 ---
 

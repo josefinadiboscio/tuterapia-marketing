@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
-import { leerFunnel, type Etapa } from "@/lib/funnel";
-import { entero, porcentaje, dias, nombreDeMes, SIN_DATO } from "@/lib/ui/format";
+import { Embudo } from "@/components/embudo";
+import { GrillaCohorte } from "@/components/grilla-cohorte";
+import { leerFunnel, lecturaGrilla } from "@/lib/funnel";
+import { porcentaje, dias, SIN_DATO } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +15,7 @@ export default async function Funnel({
   const params = await searchParams;
   const ctx = await contexto(params);
   const vista = await leerFunnel(ctx.pais, params.mes);
-
-  const base = vista.etapas[0]?.valor ?? 0;
+  const lectura = lecturaGrilla(vista.grilla);
 
   return (
     <>
@@ -45,16 +46,7 @@ export default async function Funnel({
               ))}
             </div>
 
-            <section className="mt-6">
-              {vista.etapas.map((etapa, i) => (
-                <Paso
-                  key={etapa.nombre}
-                  etapa={etapa}
-                  previa={i > 0 ? vista.etapas[i - 1] : null}
-                  base={base}
-                />
-              ))}
-            </section>
+            <Embudo etapas={vista.etapas} />
 
             <section className="mt-10 grid gap-[10px] md:grid-cols-4">
               <Card
@@ -62,86 +54,26 @@ export default async function Funnel({
                 valor={dias(vista.medianaCompra)}
                 segundo={`p80 ${dias(vista.p80Compra)}`}
               />
-              <Card titulo="Compran en 24 h" valor={SIN_DATO} />
+              <Card titulo="Compran en 24 h" valor={porcentaje(vista.compranEn24h)} />
               <Card titulo="No-show" valor={porcentaje(vista.noShow)} />
-              <Card titulo="Caída 1ª → 2ª" valor={SIN_DATO} />
+              <Card titulo="Caída 1ª → 2ª" valor={porcentaje(vista.caida1a2)} />
             </section>
 
             <section className="mt-10">
               <h2 className="text-xs uppercase tracking-wide text-ter">
                 Caída por cohorte
               </h2>
-              <p className="mt-2 border-l-2 border-gold bg-warn-bg px-3 py-2 text-sm">
-                La grilla de caída paso a paso necesita el conteo de sesiones
-                por paciente, que hoy no se calcula: la tabla de agregados
-                guarda cuántos hicieron su primera sesión, no cuántos llegaron a
-                la segunda, la tercera ni la cuarta. Es una query nueva sobre
-                `sesiones`, no un cambio de pantalla.
-              </p>
+              <GrillaCohorte filas={vista.grilla} />
+              {lectura ? (
+                <p className="mt-3 border-l-2 border-gold bg-warn-bg px-3 py-2 text-sm">
+                  {lectura}
+                </p>
+              ) : null}
             </section>
           </>
         )}
       </main>
     </>
-  );
-}
-
-/**
- * A stage and, above it, the fall from the previous one. The drop goes between
- * the bars rather than inside: it is what the screen is about, not a footnote
- * on the bar.
- */
-function Paso({
-  etapa,
-  previa,
-  base,
-}: {
-  etapa: Etapa;
-  previa: Etapa | null;
-  base: number;
-}) {
-  const caida =
-    previa?.valor && etapa.valor !== null
-      ? { absoluta: previa.valor - etapa.valor, relativa: 1 - etapa.valor / previa.valor }
-      : null;
-
-  const ancho = etapa.valor !== null && base > 0 ? (etapa.valor / base) * 100 : 0;
-
-  return (
-    <div>
-      {previa ? (
-        <div className="py-1.5 pl-1 text-xs text-coral">
-          {caida ? (
-            <>
-              −{entero(caida.absoluta)} · {porcentaje(caida.relativa)}
-            </>
-          ) : (
-            <span className="text-ter">sin medir</span>
-          )}
-        </div>
-      ) : null}
-
-      <div className="flex items-center gap-3">
-        <span className="w-24 shrink-0 text-sm text-sec">{etapa.nombre}</span>
-        <div className="h-7 flex-1 bg-surface-2">
-          {etapa.valor !== null ? (
-            <div
-              className="h-7 bg-orange"
-              style={{ width: `${Math.max(ancho, 0.5)}%` }}
-            />
-          ) : (
-            <div className="h-7 border border-dashed border-borde" />
-          )}
-        </div>
-        <span className="w-28 shrink-0 text-right text-sm">
-          {etapa.valor === null ? (
-            <span className="text-ter">{etapa.falta ?? SIN_DATO}</span>
-          ) : (
-            entero(etapa.valor)
-          )}
-        </span>
-      </div>
-    </div>
   );
 }
 
@@ -157,7 +89,7 @@ function Card({
   return (
     <div className="rounded-lg border border-borde bg-surface px-4 py-3">
       <p className="text-xs text-sec">{titulo}</p>
-      <p className="mt-1 text-2xl text-texto">{valor}</p>
+      <p className="mt-1 text-2xl text-texto">{valor || SIN_DATO}</p>
       {segundo ? <p className="mt-0.5 text-xs text-ter">{segundo}</p> : null}
     </div>
   );

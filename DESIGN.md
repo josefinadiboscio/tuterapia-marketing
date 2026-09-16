@@ -286,20 +286,42 @@ es que la pregunta no aplica a ese nivel.
 
 ## Funnel
 
-Cuatro etapas en barras horizontales proporcionales: Registros → Compraron →
-1ª sesión → 2ª sesión.
+**Una cohorte seguida hacia adelante, no totales mensuales apilados.** Todas
+las etapas son la misma gente: los que se registraron en el mes. Cuántos de
+*esos* compraron, cuántos hicieron la 1ª sesión, la 2ª, hasta la 10ª.
 
-- **La caída va entre las barras, no adentro**, con el número absoluto y el
-  porcentaje. Es lo que se está mirando, no una anotación.
-- Cuatro cards: mediana de compra con el p80 debajo, compran en 24 h, no-show,
+Antes no era así: Registros agrupaba por mes de registro y Compraron por mes de
+venta, así que la caída entre las dos comparaba dos poblaciones distintas.
+
+- **Barras horizontales proporcionales**, con la caída **entre** cada par, en
+  absoluto y en porcentaje, en coral `#E5705A`.
+- **Las primeras seis desplegadas**, el resto detrás de "ver todas". El cuello
+  de botella está en los primeros saltos.
+- **Un color por etapa**, de naranja a teal profundo. La transición marca el
+  pasaje de adquisición a permanencia, así que el color dice en qué mitad del
+  embudo está parada cada etapa sin leer la etiqueta.
+
+```
+Registros #E8833F   Compraron #F0A05C   1ª #F5D28B
+2ª #7FBFBF   3ª #4A9B9B   4ª #3F8A8A   5ª #3A7D7D
+6ª #357070   7ª #2F6565   8ª #2C5F5F   9ª #285555   10ª #244B4B
+```
+
+- **Lo que todavía no pasó va vacío, nunca en cero ni con una frase.** Barra
+  punteada y el número en blanco. Una cohorte de dos meses no llegó a la 10ª
+  sesión; decir "0" sería decir que nadie volvió.
+- Cuatro cards: mediana de compra con su p80 abajo, compran en 24 h, no-show,
   caída 1ª→2ª.
-- **Grilla de caída por cohorte**: filas los últimos seis meses, columnas los
-  pasos entre sesiones (1→2, 2→3, …), cada celda el porcentaje que no pasa al
-  siguiente paso. Más caída, color más intenso. Las celdas donde todavía no
-  pasó el tiempo van punteadas, no vacías ni en cero. Al final, una columna `n`
-  con el tamaño de la cohorte, porque un 60% sobre 5 personas no es un 60%.
-- Debajo, una línea que lee la grilla: cuál es el paso más crítico y si viene
-  mejorando.
+
+**Grilla de caída por cohorte.** Filas las últimas 6 cohortes, columnas los
+pasos entre sesiones (1→2 … 9→10), la intensidad es la caída, celdas punteadas
+donde todavía no pasó el tiempo, y una columna `n` al final con el tamaño de la
+cohorte. La escala satura en 60%: más arriba todo quedaría del mismo bloque y
+la grilla dejaría de ordenar nada.
+
+Debajo, una línea que lee la grilla: cuál es el paso más caro y si viene
+mejorando entre cohortes. Con menos de seis cohortes con dato no opina sobre la
+tendencia.
 
 ## Test
 

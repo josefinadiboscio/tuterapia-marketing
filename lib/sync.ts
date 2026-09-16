@@ -19,6 +19,7 @@ import {
   conversionCohorte,
   diasHastaPago,
   curvaConversion,
+  diasHastaPrimeraSesion,
 } from "@/lib/queries/conversion";
 import { sesionesPorPaciente, precioPorSesion } from "@/lib/queries/ltv";
 import {
@@ -54,6 +55,9 @@ type Fila = {
   cohorte_edad_dias: number | null;
   mediana_dias_compra: number | null;
   p80_dias_compra: number | null;
+  mediana_dias_sesion: number | null;
+  p80_dias_sesion: number | null;
+  compran_24h: number | null;
   gasto_usd: number | null;
   cac_usd: number | null;
   costo_por_registro_usd: number | null;
@@ -295,6 +299,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     conversionSource,
     cohorteSes,
     compradores,
+    histSesion,
   ] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
@@ -312,6 +317,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     conversionPorSource(mysql, mes, pais),
     cohorteSesiones(mysql, mes, pais),
     compradoresDeCohorte(mysql, mes, pais),
+    diasHastaPrimeraSesion(mysql, mes, pais),
   ]);
 
   return {
@@ -331,6 +337,7 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     conversionSource,
     cohorteSes,
     compradores,
+    histSesion,
   };
 }
 
@@ -387,6 +394,9 @@ function armarFila({
     // days: before that it can only contain the people who paid fast.
     mediana_dias_compra: maduro ? percentil(medido.histPago, 0.5) : null,
     p80_dias_compra: maduro ? percentil(medido.histPago, 0.8) : null,
+    mediana_dias_sesion: maduro ? percentil(medido.histSesion, 0.5) : null,
+    p80_dias_sesion: maduro ? percentil(medido.histSesion, 0.8) : null,
+    compran_24h: maduro ? dentroDe(medido.histPago, 1) : null,
     gasto_usd: gastoUsd,
     cac_usd: gastoUsd === null ? null : cac(gastoUsd, medido.nuevos),
     costo_por_registro_usd:
@@ -455,6 +465,7 @@ function armarTotal(
     paises.reduce((acc, m) => acc + fn(m), 0);
 
   const histPago = paises.flatMap((m) => m.histPago);
+  const histSesion = paises.flatMap((m) => m.histSesion);
   const curva = paises.flatMap((m) => m.curva);
   const cohorteRegistros = suma((m) => m.cohorte.registros);
   const cohorteConvertidos = suma((m) => m.cohorte.convertidos);
@@ -487,6 +498,16 @@ function armarTotal(
       edad >= VENTANA_CONVERSION_DIAS
         ? percentil(consolidar(histPago), 0.8)
         : null,
+    mediana_dias_sesion:
+      edad >= VENTANA_CONVERSION_DIAS
+        ? percentil(consolidar(histSesion), 0.5)
+        : null,
+    p80_dias_sesion:
+      edad >= VENTANA_CONVERSION_DIAS
+        ? percentil(consolidar(histSesion), 0.8)
+        : null,
+    compran_24h:
+      edad >= VENTANA_CONVERSION_DIAS ? dentroDe(consolidar(histPago), 1) : null,
     gasto_usd: gastoUsd,
     cac_usd: gastoUsd === null ? null : cac(gastoUsd, nuevos),
     costo_por_registro_usd:
@@ -605,6 +626,9 @@ function filaVacia(
     cohorte_edad_dias: null,
     mediana_dias_compra: null,
     p80_dias_compra: null,
+    mediana_dias_sesion: null,
+    p80_dias_sesion: null,
+    compran_24h: null,
     gasto_usd: null,
     cac_usd: null,
     costo_por_registro_usd: null,
@@ -627,7 +651,8 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        mes, pais, plataforma, registros, pacientes_nuevos, pacientes_activados,
        pacientes_activos,
        conversion_cohorte, conversion_proyectada, cohorte_edad_dias,
-       mediana_dias_compra, p80_dias_compra, gasto_usd, cac_usd,
+       mediana_dias_compra, p80_dias_compra, mediana_dias_sesion,
+       p80_dias_sesion, compran_24h, gasto_usd, cac_usd,
        costo_por_registro_usd,
        sesiones_por_paciente, margen_usd_sesion, ltv_usd, cohorte_cerrada,
        churn_rate, es_provisorio, registros_tramo_previo,
@@ -646,6 +671,9 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        conversion_proyectada = excluded.conversion_proyectada,
        cohorte_edad_dias = excluded.cohorte_edad_dias,
        mediana_dias_compra = excluded.mediana_dias_compra,
+       mediana_dias_sesion = excluded.mediana_dias_sesion,
+       p80_dias_sesion = excluded.p80_dias_sesion,
+       compran_24h = excluded.compran_24h,
        p80_dias_compra = excluded.p80_dias_compra,
        gasto_usd = excluded.gasto_usd,
        cac_usd = excluded.cac_usd,
@@ -757,4 +785,11 @@ export function mesActual(hoy = new Date()): string {
 function mesDe(year: number, month: number): string {
   const d = new Date(Date.UTC(year, month, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Share of a histogram at or below `dias`, for "how many bought inside a day". */
+function dentroDe(hist: { dias: number; n: number }[], dias: number): number | null {
+  const total = hist.reduce((a, r) => a + r.n, 0);
+  if (total === 0) return null;
+  return hist.filter((r) => r.dias <= dias).reduce((a, r) => a + r.n, 0) / total;
 }

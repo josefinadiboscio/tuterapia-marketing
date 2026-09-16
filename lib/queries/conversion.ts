@@ -3,6 +3,7 @@ import {
   monthRangeUtc,
   diasLocales,
   PRIMER_PAGO,
+  PRIMERA_SESION,
   VENTANA_CONVERSION_DIAS,
   type DiasHistograma,
   type Pais,
@@ -75,6 +76,38 @@ export async function diasHastaPago(
       WHERE l.tipo = 1 AND l.paisDominio = ?
         AND l.creacion >= ? AND l.creacion < ?
         AND p.primera < DATE_ADD(l.creacion, INTERVAL ${VENTANA_CONVERSION_DIAS} DAY)
+      GROUP BY dias
+      ORDER BY dias`,
+    [pais, start, end],
+  );
+  return rows.map((r) => ({ dias: Number(r.dias), n: Number(r.n) }));
+}
+
+/**
+ * Days from signing up to the FIRST REALIZED SESSION, as a histogram.
+ *
+ * A different distance from diasHastaPago, and the one the funnel is about.
+ * Paying takes a click and happens the same day for most people, so its median
+ * is zero; sitting down with a therapist takes finding a slot in the diary, and
+ * runs three to five days with a p80 near two weeks.
+ *
+ * No window: the funnel puts no clock on its session stages either, so putting
+ * one here would count a different population than the bars above.
+ */
+export async function diasHastaPrimeraSesion(
+  conn: Connection,
+  mes: string,
+  pais: Pais,
+): Promise<DiasHistograma> {
+  const { start, end } = monthRangeUtc(mes);
+  const [rows] = await conn.query<
+    (RowDataPacket & { dias: number; n: number })[]
+  >(
+    `SELECT ${diasLocales("s.primera", "l.creacion")} AS dias, COUNT(*) AS n
+       FROM login l
+       JOIN (${PRIMERA_SESION}) s ON s.id_paciente = l.id
+      WHERE l.tipo = 1 AND l.paisDominio = ?
+        AND l.creacion >= ? AND l.creacion < ?
       GROUP BY dias
       ORDER BY dias`,
     [pais, start, end],

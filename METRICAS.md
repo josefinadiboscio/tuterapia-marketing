@@ -482,8 +482,11 @@ create table marketing.metricas_mensuales (
   pacientes_activos   int,
   conversion_cohorte  numeric,
   conversion_proyectada boolean,
-  mediana_dias_compra numeric,
+  mediana_dias_compra numeric,   -- registro -> primer pago
   p80_dias_compra     numeric,
+  mediana_dias_sesion numeric,   -- registro -> primera sesion realizada
+  p80_dias_sesion     numeric,
+  compran_24h         numeric,
   gasto_usd           numeric,
   cac_usd             numeric,
   margen_usd          numeric,
@@ -509,6 +512,31 @@ error). El dashboard muestra la última sincronización en el header. Sin eso,
 un cron caído pasa desapercibido durante semanas.
 
 ---
+
+
+### Dos distancias distintas, no una mal medida
+
+`mediana_dias_compra` mide **registro → primer pago**. Da 0 con p80 de 3: pagar
+es un click y la mayoría lo hace el mismo día. Está bien medida.
+
+`mediana_dias_sesion` mide **registro → primera sesión realizada**, que es la
+distancia de la que habla el Funnel: conseguir un lugar en la agenda lleva
+entre 3 y 5 días, con p80 entre 9 y 13.
+
+Medido sobre cohortes de mayo a julio de 2026:
+
+| | Hasta el pago | Hasta la 1ª sesión |
+|---|---|---|
+| AR | mediana 0 · p80 4–6 | mediana 3–4 · p80 9–11 |
+| UY | mediana 0 · p80 4–5 | mediana 4–5 · p80 11–13 |
+
+La card del Funnel muestra la segunda y se llama "Hasta la 1ª sesión". La
+primera se sigue guardando: cuán rápido paga la gente es una pregunta real,
+solo que no es la del embudo.
+
+`compran_24h` sale del mismo histograma del pago: qué proporción pagó dentro
+del día.
+
 
 ## 9. Pendientes
 

@@ -57,9 +57,9 @@ export default async function Funnel({
 
             <section className="mt-10 grid gap-[10px] md:grid-cols-4">
               <Card
-                titulo="Mediana de compra"
-                valor={dias(vista.medianaCompra)}
-                segundo={`p80 ${dias(vista.p80Compra)}`}
+                titulo="Hasta la 1ª sesión"
+                valor={dias(vista.medianaSesion)}
+                segundo={`p80 ${dias(vista.p80Sesion)}`}
               />
               <Card titulo="Compran en 24 h" valor={porcentaje(vista.compranEn24h)} />
               <Card titulo="No-show" valor={porcentaje(vista.noShow)} />

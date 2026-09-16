@@ -42,8 +42,8 @@ export type FilaCohorte = {
 export type VistaFunnel = {
   mes: string | null;
   etapas: Etapa[];
-  medianaCompra: number | null;
-  p80Compra: number | null;
+  medianaSesion: number | null;
+  p80Sesion: number | null;
   compranEn24h: number | null;
   noShow: number | null;
   caida1a2: number | null;
@@ -68,8 +68,8 @@ export async function leerFunnel(
       return {
         mes: null,
         etapas: [],
-        medianaCompra: null,
-        p80Compra: null,
+        medianaSesion: null,
+        p80Sesion: null,
         compranEn24h: null,
         noShow: null,
         caida1a2: null,
@@ -81,10 +81,12 @@ export async function leerFunnel(
     const [mensual, sesiones, grillaRaw] = await Promise.all([
       db.query<{
         registros: number;
-        mediana_dias_compra: string | null;
-        p80_dias_compra: string | null;
+        mediana_dias_sesion: string | null;
+        p80_dias_sesion: string | null;
+        compran_24h: string | null;
       }>(
-        `select registros, mediana_dias_compra::text, p80_dias_compra::text
+        `select registros, mediana_dias_sesion::text, p80_dias_sesion::text,
+                compran_24h::text
            from marketing.metricas_mensuales
           where pais = $1 and plataforma = 'TODAS'
             and to_char(mes, 'YYYY-MM') = $2`,
@@ -150,12 +152,15 @@ export async function leerFunnel(
     return {
       mes: elegido,
       etapas,
-      medianaCompra:
-        fila?.mediana_dias_compra == null ? null : Number(fila.mediana_dias_compra),
-      p80Compra: fila?.p80_dias_compra == null ? null : Number(fila.p80_dias_compra),
-      // A median of zero days means most people buy the day they sign up, so
-      // the share buying inside 24 h is what that median is really saying.
-      compranEn24h: null,
+      // The distance to sitting down, not to paying. Paying is a click and
+      // happens the same day for most people, which is why that median reads
+      // zero; finding a slot in a diary takes three to five days.
+      medianaSesion:
+        fila?.mediana_dias_sesion == null ? null : Number(fila.mediana_dias_sesion),
+      p80Sesion:
+        fila?.p80_dias_sesion == null ? null : Number(fila.p80_dias_sesion),
+      compranEn24h:
+        fila?.compran_24h == null ? null : Number(fila.compran_24h),
       // Of those who bought, how many never sat down.
       noShow:
         compraron && compraron > 0 && s1 !== null

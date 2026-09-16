@@ -79,9 +79,21 @@ job como la web. **Nunca duplicar un cálculo entre las dos.**
 
 **Datos**
 - MySQL es de solo lectura. Ninguna escritura, nunca.
-- Nunca leer columnas con datos personales (`nombre`, `apellido`, `telefono`,
-  `email`, `fecha_nacimiento`). El dashboard es agregado: no necesita
-  identificar a nadie.
+- Las pantallas y los agregados son anónimos. Ninguna tabla de Supabase guarda
+  `nombre`, `apellido`, `telefono`, `email` ni `fecha_nacimiento`, y ninguna
+  query del job los lee. El dashboard no necesita identificar a nadie.
+- **Única excepción: la exportación nominal de cohorte** (`/api/funnel/csv`
+  con `?nominal=1`), pedida explícitamente por el dueño del producto el
+  2026-09-16. Lee `nombre` y `email` de MySQL **en el momento de la descarga**
+  y no los persiste: no pasan por Supabase, no quedan en un agregado, no los
+  toca el cron. Si hiciera falta otro dato personal, se agrega acá o no se
+  agrega.
+- Esa ruta es la única que consulta MySQL en vivo. Guardar los datos personales
+  en Supabase sería peor: dejaría una segunda copia permanente de un padrón de
+  pacientes en tratamiento, sincronizada todas las noches.
+- **Riesgo abierto, sin resolver**: el dashboard entra con una sola contraseña
+  compartida, así que cualquiera que la tenga puede bajar el padrón completo y
+  no queda registro de quién lo hizo.
 - Agregar del lado de MySQL y traer el resultado ya reducido. No traer filas
   crudas para agregar en memoria. El job tiene 60 segundos.
 - Sincronización incremental por fecha, no tabla completa.

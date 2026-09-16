@@ -660,7 +660,7 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        tramo_dias, actualizado_en
      ) values (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-       $17, $18, $19, $20, $21, $22, $23, $24, $25, now()
+       $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, now()
      )
      on conflict (mes, pais, plataforma) do update set
        registros = excluded.registros,
@@ -702,6 +702,9 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
       fila.cohorte_edad_dias,
       fila.mediana_dias_compra,
       fila.p80_dias_compra,
+      fila.mediana_dias_sesion,
+      fila.p80_dias_sesion,
+      fila.compran_24h,
       fila.gasto_usd,
       fila.cac_usd,
       fila.costo_por_registro_usd,

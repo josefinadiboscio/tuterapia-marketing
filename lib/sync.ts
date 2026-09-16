@@ -30,7 +30,7 @@ import {
   margenUsdSesion,
   edadCohorteDias,
 } from "@/lib/metrics";
-import { resolverPlataforma, type UtmMapping } from "@/lib/utm";
+import { resolverPlataforma, SIN_MAPEAR, type UtmMapping } from "@/lib/utm";
 import { transaction } from "@/lib/db";
 
 /** One row of marketing.metricas_mensuales, before it is written. */
@@ -135,8 +135,32 @@ export async function sincronizarMes(
 
   filas.push(armarTotal(mes, crudos, edad, esProvisorio, gastos, tramos));
 
+  // What no pattern matched, with the volume behind it. The dashboard never
+  // queries MySQL, so Admin can only warn about a gap the job wrote down.
+  const sinMapear = (PAISES as readonly Pais[]).flatMap((pais) =>
+    (crudos[pais]?.porSource ?? [])
+      .filter(
+        (fila) => resolverPlataforma(fila.utm_source, mapping) === SIN_MAPEAR,
+      )
+      .map((fila) => ({ pais, utm_source: fila.utm_source, n: fila.n })),
+  );
+
   await transaction(db, async () => {
     for (const fila of filas) await upsert(db, fila);
+
+    await db.query(
+      `delete from marketing.utm_sin_mapear where mes = $1`,
+      [`${mes}-01`],
+    );
+    for (const s of sinMapear) {
+      await db.query(
+        `insert into marketing.utm_sin_mapear (mes, pais, utm_source, registros)
+         values ($1, $2, $3, $4)
+         on conflict (mes, pais, utm_source)
+         do update set registros = excluded.registros, detectado_en = now()`,
+        [`${mes}-01`, s.pais, s.utm_source, s.n],
+      );
+    }
   });
 
   return filas.length;

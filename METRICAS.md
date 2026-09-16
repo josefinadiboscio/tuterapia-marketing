@@ -116,6 +116,30 @@ la proporción entre ellas, sin que haya cambiado ningún precio.
 La columna es nullable, así que hay una tercera categoría de hecho: los pagos
 sin dato.
 
+Medido sobre los últimos 6 meses:
+
+| País | Tipo | Precio por sesión | Máximo |
+|---|---|---|---|
+| AR | online | 32.498 | 36.000 |
+| AR | presencial | 37.258 | 42.000 |
+| UY | online | 1.418 | 1.600 |
+| UY | presencial | 1.514 | 1.850 |
+
+**Los precios de Argentina suben todos los meses** por inflación: el máximo
+observado fue 31.000 en abril y 36.000 en septiembre. El promedio de una
+ventana larga siempre queda por debajo del precio vigente, y por eso el job
+calcula el margen con los pagos **del propio mes**, nunca con un promedio
+arrastrado.
+
+En Uruguay el precio no se movió en todo el año y el máximo observado coincide
+exactamente con el precio de lista.
+
+**El peso de la mezcla es distinto en cada país.** En Argentina presencial es
+el 5% de las sesiones, así que el promedio ponderado es prácticamente el
+precio online. En Uruguay están casi 50/50 y difieren 7%, así que un margen
+que no separe por `tipo_session` se mueve cuando cambia la mezcla aunque
+ningún precio haya cambiado.
+
 ---
 
 ## 4. Fórmulas
@@ -399,5 +423,6 @@ un cron caído pasa desapercibido durante semanas.
       hicieron una sola sesión)
 - [ ] Contenido de `utm_content` — si trae la creatividad, sirve para Ads
 - [ ] Objetivo de LTV/CAC propio
-- [ ] `pacientes_pagos.tipo` y `tipo_session` (online/presencial): confirmar
-      si afectan el margen o sirven para segmentar
+- [x] `pacientes_pagos.tipo`: **no sirve para segmentar**. Vale 1 en los
+      22.164 pagos confirmados de los últimos 6 meses, sin nulos.
+- [x] `tipo_session`: **sí afecta el margen**, ver §3.

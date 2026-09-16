@@ -40,7 +40,8 @@ export function GraficoSerie({
     s.puntos.filter((p) => p.valor !== null).map((p) => p.valor!),
   );
 
-  if (valores.length === 0) {
+  const vacia = valores.length === 0;
+  if (vacia && techos.length === 0) {
     return (
       <p className="mt-6 text-sm text-sec">
         Esta serie todavía no tiene datos. El gasto mensual se carga en Admin y
@@ -54,12 +55,19 @@ export function GraficoSerie({
   const referencias = escalaY(maximo);
   const tope = referencias[referencias.length - 1]!;
 
-  const ancho = 960;
-  const alto = 190;
+  // The plot is 150 tall plus a 28px label row, and the viewBox width matches
+  // the container so the whole thing lands near 1:1 and stays under 200px.
+  // Before, the aspect ratio let the chart grow with the width and push
+  // Economía off the screen.
+  const ancho = 1100;
+  const alto = 150;
   const margenIzq = 54;
+  // Room above the plot: without it the top Y reference and a high ceiling
+  // label get clipped by the viewBox.
+  const margenSup = 14;
   const util = ancho - margenIzq;
   const paso = util / meses.length;
-  const escala = (v: number) => alto - (v / (tope || 1)) * alto;
+  const escala = (v: number) => margenSup + alto - (v / (tope || 1)) * alto;
 
   // Narrow bars: a third of the slot, so the gap reads as wide as the bar.
   const anchoBarra = Math.min(paso * 0.34, 26);
@@ -67,8 +75,9 @@ export function GraficoSerie({
   return (
     <figure className="mt-5">
       <svg
-        viewBox={`0 0 ${ancho} ${alto + 34}`}
-        className="w-full"
+        viewBox={`0 0 ${ancho} ${margenSup + alto + 28}`}
+        className="h-[192px] w-full"
+        preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label={`Serie de ${meses.length} meses`}
       >
@@ -93,14 +102,14 @@ export function GraficoSerie({
           </g>
         ))}
 
-        {techos.map((techo, i) => (
+        {techos.map((techo) => (
           <g key={techo.etiqueta}>
-            {i === 0 ? (
+            {techo.valor === Math.min(...techos.map((t) => t.valor)) ? (
               <rect
                 x={margenIzq}
                 y={escala(techo.valor)}
                 width={util}
-                height={alto - escala(techo.valor)}
+                height={margenSup + alto - escala(techo.valor)}
                 className="fill-teal"
                 opacity={0.08}
               />
@@ -136,7 +145,7 @@ export function GraficoSerie({
                       x={centro - anchoBarra / 2}
                       y={y}
                       width={anchoBarra}
-                      height={alto - y}
+                      height={margenSup + alto - y}
                       className={serie.relleno}
                     />
                     <text
@@ -178,7 +187,7 @@ export function GraficoSerie({
           <text
             key={p.mes}
             x={margenIzq + i * paso + paso / 2}
-            y={alto + 16}
+            y={margenSup + alto + 15}
             textAnchor="middle"
             className={p.enCurso ? "fill-dim text-[10px]" : "fill-ter text-[10px]"}
           >
@@ -188,7 +197,14 @@ export function GraficoSerie({
         ))}
       </svg>
 
-      {series.length > 1 ? (
+      {vacia ? (
+        <p className="mt-1 text-[11px] text-sec">
+          Sin datos para esta serie. La banda marca el LTV; falta cargar el
+          gasto mensual en Admin para que aparezca la línea.
+        </p>
+      ) : null}
+
+      {series.length > 1 && !vacia ? (
         <div className="mt-1 flex flex-wrap gap-x-5 text-[11px] text-ter">
           {series.map((s) => (
             <span key={s.nombre} className="flex items-center gap-1.5">

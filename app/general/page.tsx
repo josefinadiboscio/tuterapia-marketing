@@ -224,6 +224,7 @@ function Bloque({
     clave === "vol"
       ? { trazo: "stroke-sage", relleno: "fill-sage" }
       : { trazo: "stroke-teal", relleno: "fill-teal" };
+  const borde = clave === "vol" ? "border-sage" : "border-teal";
   const segunda =
     clave === "vol"
       ? { trazo: "stroke-sage-light", relleno: "fill-sage-light" }
@@ -259,7 +260,7 @@ function Bloque({
       <h2 className="text-xs uppercase tracking-wide text-ter">{titulo}</h2>
 
       <div
-        className={`mt-3 grid gap-px bg-borde-suave ${
+        className={`mt-3 grid gap-[10px] ${
           metricas.length === 4 ? "md:grid-cols-4" : "md:grid-cols-3"
         }`}
       >
@@ -272,6 +273,7 @@ function Bloque({
             serie={serie}
             cerrados={cerrados}
             porPais={clave === "eco" ? porPais : []}
+            borde={borde}
           />
         ))}
       </div>
@@ -295,6 +297,7 @@ function Card({
   serie,
   cerrados,
   porPais,
+  borde,
 }: {
   metrica: Metrica;
   activa: boolean;
@@ -302,6 +305,7 @@ function Card({
   serie: MesSerie[];
   cerrados: MesSerie[];
   porPais: VistaGeneral["porPais"];
+  borde: string;
 }) {
   const dividido = porPais.length > 0;
   const ultimo = serie.at(-1);
@@ -310,51 +314,55 @@ function Card({
     <Link
       href={href}
       title={metrica.definicion}
-      className={`block bg-surface px-4 py-3 ${
-        activa ? "ring-1 ring-acento" : "hover:bg-borde-suave"
+      className={`block rounded-lg border bg-surface px-4 py-3 transition-colors ${
+        activa ? borde : "border-borde hover:border-sec"
       }`}
     >
       <p className="text-xs text-sec">{metrica.nombre}</p>
 
       {dividido ? (
-        <div className="mt-1 space-y-1">
-          {porPais.map((p) => (
-            <div key={p.pais} className="flex items-baseline justify-between">
-              <span className="text-xs text-sec">{p.pais}</span>
-              <span className="text-lg text-texto">
-                {metrica.formato(ultimoValor(p.serie, metrica.campo))}
-              </span>
-            </div>
-          ))}
-          {porPais.map((p) => (
-            <TendenciaTexto
-              key={`t-${p.pais}`}
-              prefijo={p.pais}
-              t={tendencia(
-                p.serie
-                  .filter((m) => !m.es_provisorio)
-                  .slice(-MESES_TENDENCIA)
-                  .map(metrica.campo),
-                metrica.unidad,
-              )}
-            />
-          ))}
-        </div>
+        <>
+          {/* On TOTAL the economy block shows one country large and the other
+              small: averaging two markets with different commission, duration
+              and LTV describes neither. */}
+          <p className="mt-1 text-2xl text-texto">
+            {metrica.formato(ultimoValor(porPais[0]!.serie, metrica.campo))}
+          </p>
+          <p className="mt-0.5 text-xs text-sec">
+            {porPais[0]!.pais} · {porPais[1]!.pais}{" "}
+            {metrica.formato(ultimoValor(porPais[1]!.serie, metrica.campo))}
+          </p>
+          <TendenciaCard
+            serie={porPais[0]!.serie.filter((m) => !m.es_provisorio)}
+            metrica={metrica}
+          />
+        </>
       ) : (
         <>
           <p className="mt-1 text-2xl text-texto">
             {metrica.formato(metrica.campo(ultimo ?? ({} as MesSerie)))}
           </p>
-          <TendenciaTexto
-            t={tendencia(
-              cerrados.slice(-MESES_TENDENCIA).map(metrica.campo),
-              metrica.unidad,
-            )}
-          />
+          <TendenciaCard serie={cerrados} metrica={metrica} />
         </>
       )}
     </Link>
   );
+}
+
+/** No value, no trend: a dash and nothing else, never an explanation. */
+function TendenciaCard({
+  serie,
+  metrica,
+}: {
+  serie: MesSerie[];
+  metrica: Metrica;
+}) {
+  const t = tendencia(
+    serie.slice(-MESES_TENDENCIA).map(metrica.campo),
+    metrica.unidad,
+  );
+  if (t.direccion === "sin_datos") return null;
+  return <TendenciaTexto t={t} />;
 }
 
 /**
@@ -363,14 +371,6 @@ function Card({
  * it for anyone scanning.
  */
 function TendenciaTexto({ t, prefijo }: { t: Tendencia; prefijo?: string }) {
-  if (t.direccion === "sin_datos") {
-    return (
-      <p className="mt-1 text-xs text-ter">
-        {prefijo ? `${prefijo} · ` : ""}sin datos suficientes
-      </p>
-    );
-  }
-
   const flecha =
     t.direccion === "creciendo" ? "↑" : t.direccion === "bajando" ? "↓" : "→";
 

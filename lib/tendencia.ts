@@ -140,6 +140,14 @@ export function lectura(t: {
     return "Los pacientes nuevos se sostienen pero los activos caen: se está yendo gente por el otro lado.";
   }
 
+  if (sube(t.registros) && sube(t.nuevos) && !baja(t.conversion)) {
+    return "Crecen los registros y los pacientes nuevos sin que caiga la conversión: el volumen sube sin perder calidad de tráfico.";
+  }
+
+  if (sube(t.nuevos) && baja(t.activos)) {
+    return "Entran más pacientes nuevos pero el total de activos baja: la retención se está comiendo lo que trae la adquisición.";
+  }
+
   if (quieto(t.conversion) && quieto(t.registros) && quieto(t.nuevos)) {
     return "Sin movimientos relevantes en los últimos seis meses cerrados.";
   }

@@ -14,23 +14,23 @@ export function Pendiente({
 }) {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <p className="text-xs uppercase tracking-wide text-slate-400">
+      <p className="text-xs uppercase tracking-wide text-ter">
         {titulo} · sin construir
       </p>
 
-      <h2 className="mt-6 text-xs uppercase tracking-wide text-slate-400">
+      <h2 className="mt-6 text-xs uppercase tracking-wide text-ter">
         Qué va a contener
       </h2>
-      <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+      <ul className="mt-2 space-y-1.5 text-sm text-sec">
         {contenido.map((linea) => (
           <li key={linea}>{linea}</li>
         ))}
       </ul>
 
-      <h2 className="mt-7 text-xs uppercase tracking-wide text-slate-400">
+      <h2 className="mt-7 text-xs uppercase tracking-wide text-ter">
         Qué falta para habilitarla
       </h2>
-      <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+      <ul className="mt-2 space-y-1.5 text-sm text-sec">
         {falta.map((linea) => (
           <li key={linea}>{linea}</li>
         ))}

@@ -8,15 +8,15 @@ export default async function Login({
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
       <div>
-        <h1 className="text-xl font-semibold">Tu Terapia · Marketing</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-xl font-medium">Tu Terapia · Marketing</h1>
+        <p className="mt-1 text-sm text-sec">
           Acceso restringido.
         </p>
       </div>
 
       {falta ? (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Falta configurar <code>DASHBOARD_PASSWORD</code> en Vercel.
+        <p className="rounded-md bg-warn-bg px-3 py-2 text-sm text-warn">
+          Falta configurar DASHBOARD_PASSWORD en Vercel.
         </p>
       ) : null}
 
@@ -26,16 +26,16 @@ export default async function Login({
           name="password"
           autoFocus
           placeholder="Contraseña"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+          className="rounded-md border border-borde px-3 py-2 text-sm outline-none focus:border-acento"
         />
         <button
           type="submit"
-          className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+          className="rounded-md bg-acento px-3 py-2 text-sm text-bg"
         >
           Entrar
         </button>
         {error ? (
-          <p className="text-sm text-red-600">Contraseña incorrecta.</p>
+          <p className="text-sm text-danger">Contraseña incorrecta.</p>
         ) : null}
       </form>
     </main>

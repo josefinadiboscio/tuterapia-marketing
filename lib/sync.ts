@@ -49,6 +49,7 @@ type Fila = {
   p80_dias_compra: number | null;
   gasto_usd: number | null;
   cac_usd: number | null;
+  costo_por_registro_usd: number | null;
   sesiones_por_paciente: number | null;
   margen_usd_sesion: number | null;
   ltv_usd: number | null;
@@ -264,6 +265,8 @@ function armarFila({
     p80_dias_compra: maduro ? percentil(medido.histPago, 0.8) : null,
     gasto_usd: gastoUsd,
     cac_usd: gastoUsd === null ? null : cac(gastoUsd, medido.nuevos),
+    costo_por_registro_usd:
+      gastoUsd === null ? null : cac(gastoUsd, medido.registros),
     // The LTV factors only mean something once the cohort has closed.
     sesiones_por_paciente: cerrada ? porPaciente : null,
     margen_usd_sesion: margen,
@@ -362,6 +365,8 @@ function armarTotal(
         : null,
     gasto_usd: gastoUsd,
     cac_usd: gastoUsd === null ? null : cac(gastoUsd, nuevos),
+    costo_por_registro_usd:
+      gastoUsd === null ? null : cac(gastoUsd, suma((m) => m.registros)),
     sesiones_por_paciente:
       cerrada && pacientes > 0 ? sesiones / pacientes : null,
     // A single margin across two currencies would be meaningless.
@@ -460,6 +465,7 @@ function filaVacia(
     p80_dias_compra: null,
     gasto_usd: null,
     cac_usd: null,
+    costo_por_registro_usd: null,
     sesiones_por_paciente: null,
     margen_usd_sesion: null,
     ltv_usd: null,
@@ -480,13 +486,14 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        pacientes_activos,
        conversion_cohorte, conversion_proyectada, cohorte_edad_dias,
        mediana_dias_compra, p80_dias_compra, gasto_usd, cac_usd,
+       costo_por_registro_usd,
        sesiones_por_paciente, margen_usd_sesion, ltv_usd, cohorte_cerrada,
        churn_rate, es_provisorio, registros_tramo_previo,
        pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
        tramo_dias, actualizado_en
      ) values (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-       $17, $18, $19, $20, $21, $22, $23, $24, now()
+       $17, $18, $19, $20, $21, $22, $23, $24, $25, now()
      )
      on conflict (mes, pais, plataforma) do update set
        registros = excluded.registros,
@@ -500,6 +507,7 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        p80_dias_compra = excluded.p80_dias_compra,
        gasto_usd = excluded.gasto_usd,
        cac_usd = excluded.cac_usd,
+       costo_por_registro_usd = excluded.costo_por_registro_usd,
        sesiones_por_paciente = excluded.sesiones_por_paciente,
        margen_usd_sesion = excluded.margen_usd_sesion,
        ltv_usd = excluded.ltv_usd,
@@ -526,6 +534,7 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
       fila.p80_dias_compra,
       fila.gasto_usd,
       fila.cac_usd,
+      fila.costo_por_registro_usd,
       fila.sesiones_por_paciente,
       fila.margen_usd_sesion,
       fila.ltv_usd,

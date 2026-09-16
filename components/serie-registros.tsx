@@ -61,7 +61,7 @@ export function SerieRegistros({
               y={alto - altura}
               width={anchoBarra}
               height={altura}
-              className="fill-slate-200"
+              className="fill-chart-fill"
             />
           );
         })}
@@ -69,18 +69,18 @@ export function SerieRegistros({
           d={linea}
           fill="none"
           strokeWidth={1.5}
-          className="stroke-slate-900"
+          className="stroke-chart-line"
         />
       </svg>
 
-      <figcaption className="mt-1 flex justify-between text-xs tabular-nums text-slate-400">
+      <figcaption className="mt-1 flex justify-between text-xs tabular-nums text-ter">
         {etiquetas.map((i) => (
           <span key={i}>{serie[i]!.fecha.slice(5)}</span>
         ))}
       </figcaption>
-      <p className="mt-1 text-xs text-slate-400">
-        Barras: registros del día. Línea: media móvil de 7 días, arranca el
-        séptimo. Máximo del período {entero(maximo)}.
+      <p className="mt-1 text-xs text-ter">
+        Línea: media móvil de 7 días, arranca el séptimo. Máximo{" "}
+        {entero(maximo)}.
       </p>
     </figure>
   );

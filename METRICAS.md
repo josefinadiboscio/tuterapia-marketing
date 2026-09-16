@@ -270,7 +270,12 @@ error más fácil de cometer con esta tabla.
 ### Reglas transversales
 
 - **Todo separado AR / UY.** Activación ~8–9% contra ~16–17%, duraciones y
-  monedas distintas. El "Total" es una tercera opción, nunca el default.
+  monedas distintas.
+- **El selector arranca en Total** y recuerda la última elección. Con Total
+  seleccionado, **el bloque de Volumen suma los dos países**, pero **el de
+  Economía muestra AR y UY lado a lado, nunca un promedio**: comisión,
+  duración y LTV son muy distintos entre los dos mercados, así que un CAC o un
+  LTV promediado se mueve solo con el mix de gasto sin que nada haya cambiado.
 - **Meses en curso se marcan `es_provisorio`** y comparan contra **el mismo
   tramo del mes anterior**: los primeros N días contra los primeros N días,
   con N igual a lo transcurrido. Comparar un mes a medio andar contra uno
@@ -390,6 +395,53 @@ nada en un día suelto.
   menos de 30 días, así que vienen proyectados y se marcan como tales.
 - Las filas por plataforma llevan **solo volumen**: una conversión partida por
   plataforma en un día suelto se apoya en un puñado de registros.
+
+## 7 ter. Tendencia y lectura automática
+
+La tendencia de cada card no es el delta contra el mes anterior: es la
+**pendiente por mínimos cuadrados sobre los últimos 6 meses cerrados**. Una
+pendiente aguanta el mes raro que una comparación punta a punta leería como
+cambio de rumbo.
+
+El cambio se expresa como el movimiento a lo largo de toda la ventana:
+
+| Tipo de métrica | Unidad | Umbral de "estable" |
+|---|---|---|
+| Tasas (conversión) | puntos porcentuales | menos de 1 pp |
+| Conteos y dinero | porcentaje relativo | menos de 5% |
+
+Hacen falta **al menos 3 meses con dato**; con menos, la card dice "sin datos
+suficientes" en vez de inventar una dirección.
+
+### Reglas de la lectura automática
+
+Se evalúan en orden y gana la primera que se cumple, así que las más
+específicas van primero. Cada una es una afirmación sobre dos pendientes.
+
+| # | Condición | Qué dice |
+|---|---|---|
+| 1 | LTV / CAC < 1 | Cada paciente cuesta más de lo que deja |
+| 2 | CAC sube y costo por registro no sube | El tráfico no se encareció, se convierte peor: el problema está en el funnel |
+| 3 | CAC sube y costo por registro sube | Se encareció el tráfico: es precio de medios, no conversión |
+| 4 | CAC baja y costo por registro no baja | Se convierte mejor con el mismo tráfico |
+| 5 | Conversión baja y registros suben | Entra más gente y convierte peor |
+| 6 | Conversión sube y registros bajan | Entra menos gente pero más calificada |
+| 7 | Registros bajan y conversión estable | El problema está antes del registro |
+| 8 | Activos bajan y nuevos no bajan | Se está yendo gente por el otro lado |
+| 9 | Conversión, registros y nuevos estables | Sin movimientos relevantes |
+
+Si ninguna se cumple, no se muestra ninguna frase. **El tablero no dice nada
+antes que decir algo que no se sostiene.**
+
+### Costo por registro
+
+```
+costo_por_registro_usd = gasto_usd[mes, pais] / registros[mes, pais]
+```
+
+Es el precio del tráfico antes de convertir. Leído junto al CAC separa las dos
+razones por las que un CAC se mueve: cuánto cuesta traer a alguien, y qué
+proporción de esos alguien compra.
 
 ## 8. Tabla de agregados
 

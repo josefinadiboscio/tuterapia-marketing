@@ -1,125 +1,179 @@
-import { Nav, contextoDesde } from "@/components/nav";
-import { leerVista, type Metricas } from "@/lib/dashboard";
-import { entero, porcentaje, delta as fmtDelta, dias } from "@/lib/ui/format";
+import Link from "next/link";
+import { Nav, contexto, conContexto } from "@/components/nav";
+import { GraficoSerie, type Serie } from "@/components/grafico-serie";
+import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
+import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
+import { entero, porcentaje, usd, SIN_DATO } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Every metric on General, with how it is read and what it means. The
+ * definition lives in the tooltip: the card shows the name, the value and the
+ * trend, and nothing else.
+ */
+const VOLUMEN = [
+  {
+    id: "conversion",
+    nombre: "Conversión",
+    campo: (m: MesSerie) => m.conversion_cohorte,
+    formato: (n: number | null) => porcentaje(n),
+    unidad: "pp" as const,
+    definicion:
+      "De los que se registraron en el mes, cuántos compraron dentro de los 30 días.",
+  },
+  {
+    id: "registros",
+    nombre: "Registros",
+    campo: (m: MesSerie) => m.registros,
+    formato: (n: number | null) => entero(n),
+    unidad: "pct" as const,
+    definicion: "Cuentas creadas en el mes, excluyendo terapeutas.",
+  },
+  {
+    id: "nuevos",
+    nombre: "Pacientes nuevos",
+    campo: (m: MesSerie) => m.pacientes_nuevos,
+    formato: (n: number | null) => entero(n),
+    unidad: "pct" as const,
+    definicion:
+      "Pacientes con su primer pago confirmado en el mes. Se cuentan en el mes de la venta.",
+  },
+  {
+    id: "activos",
+    nombre: "Pacientes activos",
+    campo: (m: MesSerie) => m.pacientes_activos,
+    formato: (n: number | null) => entero(n),
+    unidad: "pct" as const,
+    definicion: "Pacientes con al menos una sesión realizada en el mes.",
+  },
+] as const;
+
+const ECONOMIA = [
+  {
+    id: "cac",
+    nombre: "CAC",
+    campo: (m: MesSerie) => m.cac_usd,
+    formato: (n: number | null) => usd(n, 1),
+    unidad: "pct" as const,
+    definicion:
+      "Gasto de marketing del mes sobre los pacientes nuevos del mes, en dólares.",
+  },
+  {
+    id: "costo_registro",
+    nombre: "Costo por registro",
+    campo: (m: MesSerie) => m.costo_por_registro_usd,
+    formato: (n: number | null) => usd(n, 1),
+    unidad: "pct" as const,
+    definicion:
+      "Gasto del mes sobre los registros del mes. Es el precio del tráfico, antes de convertir.",
+  },
+  {
+    id: "ltv",
+    nombre: "LTV",
+    campo: (m: MesSerie) => m.ltv_usd,
+    formato: (n: number | null) => usd(n, 1),
+    unidad: "pct" as const,
+    definicion:
+      "Sesiones por paciente sobre cohorte cerrada, por el margen en dólares de cada sesión.",
+  },
+] as const;
 
 export default async function General({
   searchParams,
 }: {
-  searchParams: Promise<{ pais?: string; mes?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const ctx = contextoDesde(params);
-  const vista = await leerVista(ctx.pais, ctx.mes);
-  const { actual, previo } = vista;
+  const ctx = await contexto(params);
+  const vista = await leerGeneral(ctx.pais, ctx.rango);
+
+  const serieVol =
+    VOLUMEN.find((m) => m.id === params.vol)?.id ?? VOLUMEN[0].id;
+  const serieEco =
+    ECONOMIA.find((m) => m.id === params.eco)?.id ?? ECONOMIA[0].id;
+
+  const extra = { vol: serieVol, eco: serieEco };
+  const cerrados = vista.serie.filter((m) => !m.es_provisorio);
 
   return (
     <>
       <Nav
         activa="/general"
-        ctx={{ ...ctx, mes: actual?.mes ?? ctx.mes }}
-        meses={vista.meses}
+        ctx={ctx}
+        conRango
+        extra={extra}
         ultimaSync={vista.ultimaSync}
       />
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        {!actual ? (
-          <p className="text-sm text-slate-500">
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        {vista.serie.length === 0 ? (
+          <p className="text-sm text-sec">
             No hay datos sincronizados para {ctx.pais}. Corré el job y volvé.
           </p>
         ) : (
           <>
-            {actual.es_provisorio ? (
-              <p className="text-xs text-slate-500">
-                Mes en curso · los deltas comparan los primeros{" "}
-                <span className="tabular-nums">{actual.tramo_dias ?? 0}</span>{" "}
-                días contra el mismo tramo del mes anterior
-              </p>
-            ) : null}
+            <Bloque
+              titulo="Volumen"
+              metricas={VOLUMEN}
+              seleccionada={serieVol}
+              clave="vol"
+              ctx={ctx}
+              extra={extra}
+              serie={vista.serie}
+              cerrados={cerrados}
+              tipo="barras"
+            />
 
-            <section
-              className={`mt-4 grid grid-cols-2 gap-x-8 gap-y-6 md:grid-cols-5 ${
-                actual.es_provisorio ? "text-slate-500" : ""
-              }`}
-            >
-              <Metrica
-                titulo="Registros"
-                valor={entero(actual.registros)}
-                delta={calcular(actual, previo, (m) => m.registros, actual.registros_tramo_previo)}
-                comparativo={actual.es_provisorio ? actual.registros_tramo_previo : previo?.registros}
-              />
-              <Metrica
-                titulo="Pacientes nuevos"
-                valor={entero(actual.pacientes_nuevos)}
-                nota="primer pago"
-                delta={calcular(actual, previo, (m) => m.pacientes_nuevos, actual.pacientes_nuevos_tramo_previo)}
-                comparativo={actual.es_provisorio ? actual.pacientes_nuevos_tramo_previo : previo?.pacientes_nuevos}
-              />
-              <Metrica
-                titulo="Pacientes activos"
-                valor={entero(actual.pacientes_activos)}
-                nota="con sesión en el mes"
-                delta={calcular(actual, previo, (m) => m.pacientes_activos, actual.pacientes_activos_tramo_previo)}
-                comparativo={actual.es_provisorio ? actual.pacientes_activos_tramo_previo : previo?.pacientes_activos}
-              />
-              <Metrica
-                titulo="Conversión"
-                valor={porcentaje(actual.conversion_cohorte)}
-                nota={
-                  actual.conversion_proyectada
-                    ? `proyectada · cohorte de ${actual.cohorte_edad_dias} días`
-                    : "ventana de 30 días"
-                }
-                proyectada={actual.conversion_proyectada}
-                delta={
-                  actual.conversion_proyectada || actual.es_provisorio
-                    ? null
-                    : calcular(actual, previo, (m) => m.conversion_cohorte, null)
-                }
-                comparativo={null}
-              />
-              <Metrica
-                titulo="Mediana de compra"
-                valor={dias(actual.mediana_dias_compra)}
-                nota={
-                  actual.mediana_dias_compra === null
-                    ? `faltan ${30 - (actual.cohorte_edad_dias ?? 0)} días de cohorte`
-                    : `p80 ${dias(actual.p80_dias_compra)}`
-                }
-                delta={null}
-                comparativo={null}
-              />
-            </section>
+            <Bloque
+              titulo="Economía"
+              metricas={ECONOMIA}
+              seleccionada={serieEco}
+              clave="eco"
+              ctx={ctx}
+              extra={extra}
+              serie={vista.serie}
+              cerrados={cerrados}
+              tipo="linea"
+              porPais={vista.porPais}
+              techoLtv={serieEco === "cac"}
+            />
+
+            <Lectura vista={vista} cerrados={cerrados} />
 
             {vista.plataformas.length > 0 ? (
               <section className="mt-10">
-                <h2 className="text-xs uppercase tracking-wide text-slate-400">
-                  Registros por plataforma
+                <h2 className="text-xs uppercase tracking-wide text-ter">
+                  Registros por plataforma · {vista.serie.at(-1)?.mes}
                 </h2>
-                <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-200">
-                  {vista.plataformas.map((p) => (
-                    <li
-                      key={p.plataforma}
-                      className="flex items-baseline justify-between py-1.5 text-sm"
-                    >
-                      <span className="text-slate-700">{p.plataforma}</span>
-                      <span className="flex items-baseline gap-6 tabular-nums">
-                        <span>{entero(p.registros)}</span>
-                        <span className="w-14 text-right text-slate-400">
-                          {porcentaje(p.registros / (actual.registros || 1))}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
+                <ul className="mt-3 divide-y divide-borde-suave border-t border-borde">
+                  {vista.plataformas.map((p) => {
+                    const total =
+                      vista.plataformas.reduce((a, x) => a + x.registros, 0) || 1;
+                    const parte = p.registros / total;
+                    return (
+                      <li key={p.plataforma} className="py-1.5 text-sm">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-sec">{p.plataforma}</span>
+                          <span className="flex items-baseline gap-6">
+                            <span>{entero(p.registros)}</span>
+                            <span className="w-14 text-right text-ter">
+                              {porcentaje(parte)}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="mt-1 h-1 w-full bg-borde-suave">
+                          <div
+                            className="h-1 bg-chart-fill"
+                            style={{ width: `${(parte * 100).toFixed(1)}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             ) : null}
-
-            <p className="mt-10 text-xs text-slate-400">
-              Gasto, CAC, LTV y churn esperan el gasto mensual y el tipo de
-              cambio, que se cargan en Admin.
-            </p>
           </>
         )}
       </main>
@@ -127,62 +181,263 @@ export default async function General({
   );
 }
 
-/**
- * Typography carries the hierarchy: a large figure next to a small grey label
- * says more than a box would (DESIGN.md). The delta always travels with the
- * value it compares against, so the percentage is never alone.
- */
-function Metrica({
+type Metrica = {
+  id: string;
+  nombre: string;
+  campo: (m: MesSerie) => number | null;
+  formato: (n: number | null) => string;
+  unidad: "pct" | "pp";
+  definicion: string;
+};
+
+function Bloque({
   titulo,
-  valor,
-  nota,
-  delta,
-  comparativo,
-  proyectada = false,
+  metricas,
+  seleccionada,
+  clave,
+  ctx,
+  extra,
+  serie,
+  cerrados,
+  tipo,
+  porPais = [],
+  techoLtv = false,
 }: {
   titulo: string;
-  valor: string;
-  nota?: string;
-  delta: number | null;
-  comparativo?: number | null;
-  proyectada?: boolean;
+  metricas: readonly Metrica[];
+  seleccionada: string;
+  clave: "vol" | "eco";
+  ctx: Awaited<ReturnType<typeof contexto>>;
+  extra: Record<string, string>;
+  serie: MesSerie[];
+  cerrados: MesSerie[];
+  tipo: "barras" | "linea";
+  porPais?: VistaGeneral["porPais"];
+  techoLtv?: boolean;
 }) {
+  const metrica = metricas.find((m) => m.id === seleccionada)!;
+  const dividido = clave === "eco" && porPais.length > 0;
+
+  const series: Serie[] = dividido
+    ? porPais.map((p, i) => ({
+        nombre: p.pais,
+        puntos: aPuntos(p.serie, metrica),
+        trazo: i === 0 ? "stroke-brand-400" : "stroke-brand-600",
+        relleno: i === 0 ? "fill-brand-400" : "fill-brand-600",
+      }))
+    : [
+        {
+          nombre: metrica.nombre,
+          puntos: aPuntos(serie, metrica),
+          trazo: "stroke-chart-line",
+          relleno: "fill-chart-fill",
+        },
+      ];
+
+  const techos = techoLtv
+    ? (dividido ? porPais : [{ pais: ctx.pais, serie }])
+        .map((p) => {
+          const ltv = ultimoValor(p.serie, (m) => m.ltv_usd);
+          return ltv === null
+            ? null
+            : { valor: ltv, etiqueta: `LTV ${p.pais} ${usd(ltv, 1)}` };
+        })
+        .filter((t): t is { valor: number; etiqueta: string } => t !== null)
+    : [];
+
   return (
-    <div>
-      <p className="text-xs text-slate-400">{titulo}</p>
-      <p
-        className={`mt-0.5 text-2xl tabular-nums ${
-          proyectada ? "text-amber-700" : "text-slate-900"
+    <section className="mt-2 first:mt-0 [&+section]:mt-12">
+      <h2 className="text-xs uppercase tracking-wide text-ter">{titulo}</h2>
+
+      <div
+        className={`mt-3 grid gap-px bg-borde-suave ${
+          metricas.length === 4 ? "md:grid-cols-4" : "md:grid-cols-3"
         }`}
       >
-        {valor}
-      </p>
-      {delta !== null ? (
-        <p
-          className={`mt-0.5 text-xs tabular-nums ${
-            delta >= 0 ? "text-emerald-700" : "text-red-700"
-          }`}
-        >
-          {fmtDelta(delta)}
-          {comparativo !== null && comparativo !== undefined
-            ? ` · ${entero(comparativo)}`
-            : ""}
-        </p>
-      ) : null}
-      {nota ? <p className="mt-0.5 text-xs text-slate-400">{nota}</p> : null}
-    </div>
+        {metricas.map((m) => (
+          <Card
+            key={m.id}
+            metrica={m}
+            activa={m.id === seleccionada}
+            href={conContexto("/general", ctx, { ...extra, [clave]: m.id })}
+            serie={serie}
+            cerrados={cerrados}
+            porPais={clave === "eco" ? porPais : []}
+          />
+        ))}
+      </div>
+
+      <GraficoSerie
+        series={series}
+        tipo={tipo}
+        techos={techos}
+        formato={metrica.formato}
+      />
+    </section>
   );
 }
 
-function calcular(
-  actual: Metricas,
-  previo: Metricas | null,
-  campo: (m: Metricas) => number | null,
-  tramoPrevio: number | null,
+function Card({
+  metrica,
+  activa,
+  href,
+  serie,
+  cerrados,
+  porPais,
+}: {
+  metrica: Metrica;
+  activa: boolean;
+  href: string;
+  serie: MesSerie[];
+  cerrados: MesSerie[];
+  porPais: VistaGeneral["porPais"];
+}) {
+  const dividido = porPais.length > 0;
+  const ultimo = serie.at(-1);
+  const enCurso = ultimo?.es_provisorio ?? false;
+
+  return (
+    <Link
+      href={href}
+      title={metrica.definicion}
+      className={`block bg-surface px-4 py-3 ${
+        activa ? "ring-1 ring-acento" : "hover:bg-bg"
+      }`}
+    >
+      <p className="text-xs text-ter">{metrica.nombre}</p>
+
+      {dividido ? (
+        <div className="mt-1 space-y-1">
+          {porPais.map((p) => (
+            <div key={p.pais} className="flex items-baseline justify-between">
+              <span className="text-xs text-ter">{p.pais}</span>
+              <span className="text-lg">
+                {metrica.formato(ultimoValor(p.serie, metrica.campo))}
+              </span>
+            </div>
+          ))}
+          {porPais.map((p) => (
+            <TendenciaTexto
+              key={`t-${p.pais}`}
+              prefijo={p.pais}
+              t={tendencia(
+                p.serie
+                  .filter((m) => !m.es_provisorio)
+                  .slice(-MESES_TENDENCIA)
+                  .map(metrica.campo),
+                metrica.unidad,
+              )}
+            />
+          ))}
+        </div>
+      ) : (
+        <>
+          <p
+            className={`mt-1 text-2xl ${enCurso ? "text-muted" : "text-texto"}`}
+          >
+            {metrica.formato(metrica.campo(ultimo ?? ({} as MesSerie)))}
+          </p>
+          {enCurso ? (
+            <p
+              className="mt-0.5 text-xs text-muted"
+              title="El mes todavía no cerró: el número puede cambiar hasta fin de mes."
+            >
+              en curso
+            </p>
+          ) : null}
+          <TendenciaTexto
+            t={tendencia(
+              cerrados.slice(-MESES_TENDENCIA).map(metrica.campo),
+              metrica.unidad,
+            )}
+          />
+        </>
+      )}
+    </Link>
+  );
+}
+
+/**
+ * The trend carries no colour: green is the brand, and a green "up" would make
+ * both meanings unreadable. The word says the direction and the arrow repeats
+ * it for anyone scanning.
+ */
+function TendenciaTexto({ t, prefijo }: { t: Tendencia; prefijo?: string }) {
+  if (t.direccion === "sin_datos") {
+    return (
+      <p className="mt-1 text-xs text-ter">
+        {prefijo ? `${prefijo} · ` : ""}sin datos suficientes
+      </p>
+    );
+  }
+
+  const flecha =
+    t.direccion === "creciendo" ? "↑" : t.direccion === "bajando" ? "↓" : "→";
+
+  const cambio =
+    t.cambio === null
+      ? SIN_DATO
+      : t.unidad === "pp"
+        ? `${t.cambio >= 0 ? "+" : "−"}${Math.abs(t.cambio * 100).toFixed(1)} pp`
+        : `${t.cambio >= 0 ? "+" : "−"}${Math.abs(t.cambio * 100).toFixed(0)}%`;
+
+  return (
+    <p className="mt-1 text-xs text-sec">
+      {prefijo ? `${prefijo} · ` : ""}
+      {flecha} {t.direccion} · {cambio} en {t.meses}m
+    </p>
+  );
+}
+
+function Lectura({
+  vista,
+  cerrados,
+}: {
+  vista: VistaGeneral;
+  cerrados: MesSerie[];
+}) {
+  const ultimos = cerrados.slice(-MESES_TENDENCIA);
+  const t = (campo: (m: MesSerie) => number | null, unidad: "pct" | "pp") =>
+    tendencia(ultimos.map(campo), unidad);
+
+  const ltv = ultimoValor(vista.serie, (m) => m.ltv_usd);
+  const cac = ultimoValor(vista.serie, (m) => m.cac_usd);
+
+  const texto = lectura({
+    conversion: t((m) => m.conversion_cohorte, "pp"),
+    registros: t((m) => m.registros, "pct"),
+    nuevos: t((m) => m.pacientes_nuevos, "pct"),
+    activos: t((m) => m.pacientes_activos, "pct"),
+    cac: t((m) => m.cac_usd, "pct"),
+    costoRegistro: t((m) => m.costo_por_registro_usd, "pct"),
+    ltv: t((m) => m.ltv_usd, "pct"),
+    ltvSobreCac: ltv !== null && cac !== null && cac > 0 ? ltv / cac : null,
+  });
+
+  if (!texto) return null;
+
+  return (
+    <p className="mt-8 border-l-2 border-acento pl-3 text-sm text-texto">
+      {texto}
+    </p>
+  );
+}
+
+function aPuntos(serie: MesSerie[], metrica: Metrica) {
+  return serie.map((m) => ({
+    mes: m.mes,
+    valor: metrica.campo(m),
+    enCurso: m.es_provisorio,
+  }));
+}
+
+function ultimoValor(
+  serie: MesSerie[],
+  campo: (m: MesSerie) => number | null,
 ): number | null {
-  const a = campo(actual);
-  if (a === null) return null;
-  const b = actual.es_provisorio ? tramoPrevio : previo && campo(previo);
-  if (b === null || b === undefined || b === 0) return null;
-  return (a - b) / b;
+  for (let i = serie.length - 1; i >= 0; i--) {
+    const v = campo(serie[i]!);
+    if (v !== null) return v;
+  }
+  return null;
 }

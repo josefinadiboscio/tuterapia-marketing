@@ -1,4 +1,4 @@
-import { Nav, contextoDesde } from "@/components/nav";
+import { Nav, contexto } from "@/components/nav";
 import { leerAdmin } from "@/lib/admin";
 import { entero, usd, fecha, fechaHora, nombreDeMes } from "@/lib/ui/format";
 import {
@@ -16,9 +16,9 @@ const PAISES = ["AR", "UY"] as const;
 export default async function Admin({
   searchParams,
 }: {
-  searchParams: Promise<{ pais?: string; mes?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const ctx = contextoDesde(await searchParams);
+  const ctx = await contexto(await searchParams);
   const admin = await leerAdmin();
   const mesPorDefecto = admin.meses[0] ?? new Date().toISOString().slice(0, 7);
 
@@ -33,14 +33,14 @@ export default async function Admin({
             <Etiqueta>Pendientes</Etiqueta>
 
             {admin.faltantes.length > 0 && (
-              <div className="border-l-2 border-amber-500 pl-3 text-sm">
-                <p className="text-slate-900">
+              <div className="border-l-2 border-warn pl-3 text-sm">
+                <p className="text-texto">
                   Falta el tipo de cambio de {admin.faltantes.length} mes
                   {admin.faltantes.length === 1 ? "" : "es"} cerrado
                   {admin.faltantes.length === 1 ? "" : "s"}. Sin eso el margen y
                   el LTV de esos meses quedan vacíos.
                 </p>
-                <p className="mt-1 tabular-nums text-slate-500">
+                <p className="mt-1 tabular-nums text-sec">
                   {admin.faltantes
                     .slice(0, 8)
                     .map((f) => `${f.mes} ${f.pais}`)
@@ -53,13 +53,13 @@ export default async function Admin({
             )}
 
             {admin.sinMapear.length > 0 && (
-              <div className="border-l-2 border-amber-500 pl-3 text-sm">
-                <p className="text-slate-900">
+              <div className="border-l-2 border-warn pl-3 text-sm">
+                <p className="text-texto">
                   {admin.sinMapear.length} utm_source sin mapear con volumen
                   relevante. Caen fuera de toda plataforma hasta que tengan un
                   patrón.
                 </p>
-                <ul className="mt-1 space-y-0.5 tabular-nums text-slate-500">
+                <ul className="mt-1 space-y-0.5 tabular-nums text-sec">
                   {admin.sinMapear.slice(0, 8).map((s) => (
                     <li key={`${s.utm_source}-${s.pais}`}>
                       {s.utm_source} · {s.pais} · {entero(s.registros)} registros
@@ -127,7 +127,7 @@ export default async function Admin({
           {admin.gastos.length > 0 ? (
             <table className="mt-5 w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
                   <th className="pb-1 font-normal">Mes</th>
                   <th className="pb-1 font-normal">País</th>
                   <th className="pb-1 font-normal">Canal</th>
@@ -135,7 +135,7 @@ export default async function Admin({
                   <th className="pb-1 text-right font-normal">Cargado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-borde-suave">
                 {admin.gastos.map((g) => (
                   <tr key={`${g.mes}-${g.pais}-${g.canal}`}>
                     <td className="py-1.5 tabular-nums">{g.mes}</td>
@@ -144,7 +144,7 @@ export default async function Admin({
                     <td className="py-1.5 text-right tabular-nums">
                       {usd(Number(g.monto_usd))}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-400">
+                    <td className="py-1.5 text-right tabular-nums text-ter">
                       {fecha(g.cargado_en)}
                     </td>
                   </tr>
@@ -152,7 +152,7 @@ export default async function Admin({
               </tbody>
             </table>
           ) : (
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="mt-4 text-sm text-sec">
               Sin gasto cargado. Cargá un mes y el CAC aparece en General.
             </p>
           )}
@@ -161,7 +161,7 @@ export default async function Admin({
         {/* Parámetros */}
         <section>
           <Etiqueta>Parámetros vigentes</Etiqueta>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-sec">
             Cambiar un valor inserta una vigencia nueva. La anterior no se toca:
             el job busca el valor vigente a la fecha que está costeando, no el de
             hoy.
@@ -169,20 +169,20 @@ export default async function Admin({
 
           <table className="mt-4 w-full max-w-xl text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
                 <th className="pb-1 font-normal">Parámetro</th>
                 <th className="pb-1 font-normal">País</th>
                 <th className="pb-1 text-right font-normal">Valor</th>
                 <th className="pb-1 text-right font-normal">Vigente desde</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-borde-suave">
               {admin.vigentes.map((p) => (
                 <tr key={`${p.clave}-${p.pais}`}>
                   <td className="py-1.5">{p.clave}</td>
                   <td className="py-1.5">{p.pais}</td>
                   <td className="py-1.5 text-right tabular-nums">{p.valor}</td>
-                  <td className="py-1.5 text-right tabular-nums text-slate-500">
+                  <td className="py-1.5 text-right tabular-nums text-sec">
                     {p.vigente_desde}
                   </td>
                 </tr>
@@ -230,16 +230,16 @@ export default async function Admin({
         {/* UTMs */}
         <section>
           <Etiqueta>Mapeo de UTMs</Etiqueta>
-          <p className="mt-1 text-sm text-slate-500">
-            El patrón usa <code>%</code> como comodín. Cuando dos patrones
+          <p className="mt-1 text-sm text-sec">
+            El patrón usa % como comodín. Cuando dos patrones
             coinciden con el mismo source gana el de menor orden.{" "}
-            <span className="text-slate-900">Solo es_pago entra en Ads</span>{" "}
+            <span className="text-texto">Solo es_pago entra en Ads</span>{" "}
             como tráfico pago.
           </p>
 
           <table className="mt-4 w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
                 <th className="pb-1 font-normal">Patrón</th>
                 <th className="pb-1 font-normal">Plataforma</th>
                 <th className="pb-1 font-normal">Superficie</th>
@@ -248,12 +248,12 @@ export default async function Admin({
                 <th className="pb-1" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-borde-suave">
               {admin.mapping.map((m) => (
                 <tr key={m.patron}>
-                  <td className="py-1 font-mono text-xs">{m.patron}</td>
+                  <td className="py-1 text-xs">{m.patron}</td>
                   <td className="py-1">{m.plataforma}</td>
-                  <td className="py-1 text-slate-500">{m.superficie ?? "—"}</td>
+                  <td className="py-1 text-sec">{m.superficie ?? "—"}</td>
                   <td className="py-1">{m.es_pago ? "Sí" : "No"}</td>
                   <td className="py-1 text-right tabular-nums">{m.orden}</td>
                   <td className="py-1 text-right">
@@ -261,7 +261,7 @@ export default async function Admin({
                       <input type="hidden" name="patron" value={m.patron} />
                       <button
                         type="submit"
-                        className="text-xs text-slate-400 hover:text-red-600"
+                        className="text-xs text-ter hover:text-danger"
                       >
                         Borrar
                       </button>
@@ -307,14 +307,14 @@ export default async function Admin({
         <section>
           <Etiqueta>Historial de cambios</Etiqueta>
           {admin.historial.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">
+            <p className="mt-3 text-sm text-sec">
               Sin cambios registrados todavía. Todo lo que cargues acá queda
               anotado con su valor anterior.
             </p>
           ) : (
             <table className="mt-3 w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
                   <th className="pb-1 font-normal">Qué</th>
                   <th className="pb-1 font-normal">De</th>
                   <th className="pb-1 font-normal">A</th>
@@ -322,23 +322,23 @@ export default async function Admin({
                   <th className="pb-1 text-right font-normal">Cargado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-borde-suave">
                 {admin.historial.map((c) => (
                   <tr key={c.id}>
                     <td className="py-1.5">
                       {c.clave}
-                      <span className="ml-2 text-xs text-slate-400">
+                      <span className="ml-2 text-xs text-ter">
                         {c.entidad}
                       </span>
                     </td>
-                    <td className="py-1.5 tabular-nums text-slate-500">
+                    <td className="py-1.5 tabular-nums text-sec">
                       {c.valor_anterior ?? "—"}
                     </td>
                     <td className="py-1.5 tabular-nums">{c.valor_nuevo ?? "—"}</td>
-                    <td className="py-1.5 tabular-nums text-slate-500">
+                    <td className="py-1.5 tabular-nums text-sec">
                       {c.vigente_desde ?? "—"}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-400">
+                    <td className="py-1.5 text-right tabular-nums text-ter">
                       {fechaHora(c.cargado_en)}
                     </td>
                   </tr>
@@ -348,7 +348,7 @@ export default async function Admin({
           )}
         </section>
 
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-ter">
           Los parámetros se cargan por mes. El job usa el valor vigente al cierre
           del mes que está calculando, así que una vigencia que arranca a mitad
           de mes rige para ese mes entero.{" "}
@@ -364,13 +364,13 @@ export default async function Admin({
 }
 
 const INPUT =
-  "block border-b border-slate-300 bg-transparent py-1 text-sm outline-none focus:border-slate-900";
+  "block border-b border-borde bg-transparent py-1 text-sm outline-none focus:border-acento";
 const BOTON =
-  "border-b border-slate-900 pb-1 text-sm text-slate-900 hover:text-slate-600";
+  "border-b border-acento pb-1 text-sm text-texto hover:text-sec";
 
 function Etiqueta({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-xs uppercase tracking-wide text-slate-400">{children}</h2>
+    <h2 className="text-xs uppercase tracking-wide text-ter">{children}</h2>
   );
 }
 
@@ -383,7 +383,7 @@ function Campo({
 }) {
   return (
     <label className="block">
-      <span className="block text-xs text-slate-400">{label}</span>
+      <span className="block text-xs text-ter">{label}</span>
       {children}
     </label>
   );

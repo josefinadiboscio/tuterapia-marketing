@@ -1,4 +1,4 @@
-import { Nav, contextoDesde } from "@/components/nav";
+import { Nav, contexto } from "@/components/nav";
 import { Pendiente } from "@/components/pendiente";
 import { SerieRegistros } from "@/components/serie-registros";
 import { leerMovimientos, type Resumen } from "@/lib/movimientos";
@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function Movimientos({
   searchParams,
 }: {
-  searchParams: Promise<{ pais?: string; mes?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const ctx = contextoDesde(await searchParams);
+  const ctx = await contexto(await searchParams);
   const vista = await leerMovimientos(ctx.pais);
 
   if (!vista.hasta || !vista.actual) {
@@ -43,7 +43,7 @@ export default async function Movimientos({
       <Nav activa="/movimientos" ctx={ctx} />
 
       <main className="mx-auto max-w-5xl px-6 py-8">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-sec">
           Últimos 7 días hasta el{" "}
           <span className="tabular-nums">{fecha(vista.hasta)}</span>, contra los
           7 anteriores
@@ -68,26 +68,22 @@ export default async function Movimientos({
             delta={variacion(actual, previo, (r) => r.conversion)}
             comparativo={porcentaje(previo?.conversion)}
             proyectada={actual.conversion_proyectada}
-            nota={
-              actual.conversion_proyectada
-                ? "proyectada · cohortes de menos de 30 días"
-                : undefined
-            }
+            nota={actual.conversion_proyectada ? "en curso" : undefined}
           />
         </section>
 
         <section className="mt-10">
-          <h2 className="text-xs uppercase tracking-wide text-slate-400">
+          <h2 className="text-xs uppercase tracking-wide text-ter">
             Registros por día · 30 días
           </h2>
           <SerieRegistros serie={vista.serie} />
         </section>
 
         <section className="mt-10">
-          <h2 className="text-xs uppercase tracking-wide text-slate-400">
+          <h2 className="text-xs uppercase tracking-wide text-ter">
             Plataformas · últimos 7 días
           </h2>
-          <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-200">
+          <ul className="mt-3 divide-y divide-borde-suave border-t border-borde">
             {vista.plataformas.map((p) => {
               const d =
                 p.previos > 0 ? (p.registros - p.previos) / p.previos : null;
@@ -96,20 +92,14 @@ export default async function Movimientos({
                   key={p.plataforma}
                   className="flex items-baseline justify-between py-1.5 text-sm"
                 >
-                  <span className="text-slate-700">{p.plataforma}</span>
+                  <span className="text-sec">{p.plataforma}</span>
                   <span className="flex items-baseline gap-6 tabular-nums">
                     <span>{entero(p.registros)}</span>
-                    <span className="w-14 text-right text-slate-400">
+                    <span className="w-14 text-right text-ter">
                       {porcentaje(p.registros / totalPlataformas)}
                     </span>
                     <span
-                      className={`w-24 text-right ${
-                        d === null
-                          ? "text-slate-300"
-                          : d >= 0
-                            ? "text-emerald-700"
-                            : "text-red-700"
-                      }`}
+                      className="w-24 text-right text-sec"
                     >
                       {d === null ? "—" : `${fmtDelta(d)} · ${entero(p.previos)}`}
                     </span>
@@ -141,25 +131,19 @@ function Metrica({
 }) {
   return (
     <div>
-      <p className="text-xs text-slate-400">{titulo}</p>
+      <p className="text-xs text-ter">{titulo}</p>
       <p
-        className={`mt-0.5 text-2xl tabular-nums ${
-          proyectada ? "text-amber-700" : "text-slate-900"
-        }`}
+        className={`mt-0.5 text-2xl ${proyectada ? "text-muted" : "text-texto"}`}
       >
         {valor}
       </p>
       {delta !== null ? (
-        <p
-          className={`mt-0.5 text-xs tabular-nums ${
-            delta >= 0 ? "text-emerald-700" : "text-red-700"
-          }`}
-        >
-          {fmtDelta(delta)}
+        <p className="mt-0.5 text-xs text-sec">
+          {delta >= 0 ? "↑" : "↓"} {fmtDelta(delta)}
           {comparativo ? ` · ${comparativo}` : ""}
         </p>
       ) : null}
-      {nota ? <p className="mt-0.5 text-xs text-amber-700">{nota}</p> : null}
+      {nota ? <p className="mt-0.5 text-xs text-muted">{nota}</p> : null}
     </div>
   );
 }

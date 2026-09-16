@@ -1,4 +1,4 @@
-import { Nav, contextoDesde } from "@/components/nav";
+import { Nav, contexto } from "@/components/nav";
 import { Pendiente } from "@/components/pendiente";
 
 export const dynamic = "force-dynamic";
@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 export default async function Ads({
   searchParams,
 }: {
-  searchParams: Promise<{ pais?: string; mes?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const ctx = contextoDesde(await searchParams);
+  const ctx = await contexto(await searchParams);
 
   return (
     <>

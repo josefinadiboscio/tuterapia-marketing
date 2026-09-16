@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
 import { GraficoSerie, type Serie } from "@/components/grafico-serie";
 import { GraficoDiario } from "@/components/grafico-diario";
-import { leerDiarioPorPlataforma } from "@/lib/diario";
+import { leerDesgloseDiario, type MetricaSerie } from "@/lib/desglose";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
 import { entero, porcentaje, usd, SIN_DATO } from "@/lib/ui/format";
@@ -84,6 +84,14 @@ const ECONOMIA = [
   },
 ] as const;
 
+/** The volume cards and the series columns use different names for the same thing. */
+function metricaDiaria(vol: string | undefined): MetricaSerie {
+  if (vol === "registros") return "registros";
+  if (vol === "activos") return "activos";
+  if (vol === "conversion") return "conversion";
+  return "nuevos";
+}
+
 export default async function General({
   searchParams,
 }: {
@@ -93,7 +101,7 @@ export default async function General({
   const ctx = await contexto(params);
   const [vista, diario] = await Promise.all([
     leerGeneral(ctx.pais, ctx.rango),
-    leerDiarioPorPlataforma(ctx.pais),
+    leerDesgloseDiario(ctx.pais, metricaDiaria(params.vol)),
   ]);
 
   const serieVol =
@@ -132,12 +140,16 @@ export default async function General({
             {/* Between the two blocks: the daily composition the monthly
                 aggregate hides. */}
             <section className="mt-12">
+              {/* The title follows the selected card: the chart draws whatever
+                  the cards are pointing at, so a fixed title would lie. */}
               <h2 className="text-xs uppercase tracking-wide text-ter">
-                Registros por plataforma · 30 días
+                {VOLUMEN.find((m) => m.id === serieVol)!.nombre} por plataforma ·
+                30 días
               </h2>
               <GraficoDiario
-                filas={diario.filas}
-                plataformas={diario.plataformas}
+                datos={diario}
+                rate={serieVol === "conversion"}
+                titulo={VOLUMEN.find((m) => m.id === serieVol)!.nombre}
               />
             </section>
 

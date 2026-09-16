@@ -17,8 +17,22 @@ import { withDb } from "@/lib/db";
 /** The last stage the screen draws. Two more are stored, so the tenth has somewhere to fall to. */
 export const ULTIMA_ETAPA = 10;
 
-/** A patient reaches roughly one session a week, so this is how long an nth session needs. */
-const DIAS_POR_SESION = 7;
+/**
+ * How long an nth session needs, measured against the YOUNGEST member of the
+ * cohort rather than the oldest.
+ *
+ * Both numbers are measured, not assumed. Getting to a first session takes a
+ * median of 3 to 4 days with a p80 of 8 to 12, so the p80 is the wait here.
+ * The gap from a first session to a second averages 9 days.
+ *
+ * Counting from the first of the month was the bug: the September cohort was
+ * fifteen days old by that count and drew a 89% drop from first to second
+ * session, when its newest members had had a single day to come back. A
+ * cohort is only ready when everyone in it has had the time, so the clock
+ * starts the day the month closes.
+ */
+const DIAS_PRIMERA_SESION = 10;
+const DIAS_ENTRE_SESIONES = 9;
 
 export type Etapa = {
   nombre: string;
@@ -112,7 +126,10 @@ export async function leerFunnel(
         pacientes: number;
       }>(
         `select to_char(cohorte, 'YYYY-MM') as cohorte,
-                (current_date - cohorte)::int as edad_dias,
+                -- Days since the month CLOSED, so the number holds for
+                -- whoever signed up on its last day too.
+                (current_date - (cohorte + interval '1 month')::date)::int
+                  as edad_dias,
                 cohorte_n as n, nro_sesion, pacientes
            from marketing.cohorte_sesiones
           where pais = $1
@@ -223,15 +240,20 @@ function armarGrilla(
     }));
 }
 
-/** Roughly a session a week, so an nth session needs about n weeks to happen. */
+/** `edadDias` is measured from the day the cohort's month closed, not from its first day. */
 function alcanzable(edadDias: number, nroSesion: number): boolean {
-  return edadDias >= nroSesion * DIAS_POR_SESION;
+  return edadDias >= DIAS_PRIMERA_SESION + (nroSesion - 1) * DIAS_ENTRE_SESIONES;
 }
 
+/**
+ * Days since the cohort's month ENDED, so the number holds for everyone in it,
+ * including whoever signed up on the last day. Negative for a month still
+ * running, which is clamped to zero: nothing about it is ready to read.
+ */
 function edadDeCohorte(mes: string): number {
   const [year, month] = mes.split("-").map(Number);
-  const inicio = Date.UTC(year!, month! - 1, 1, 3);
-  return Math.max(0, Math.floor((Date.now() - inicio) / 86_400_000));
+  const fin = Date.UTC(year!, month!, 1, 3);
+  return Math.max(0, Math.floor((Date.now() - fin) / 86_400_000));
 }
 
 /**

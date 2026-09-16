@@ -134,6 +134,11 @@ arrastrado.
 En Uruguay el precio no se movió en todo el año y el máximo observado coincide
 exactamente con el precio de lista.
 
+**El promedio está por debajo del precio de lista porque hay descuentos.** En
+Uruguay el mínimo observado es 608 contra 1.600 de lista. El margen se calcula
+sobre lo que se cobró de verdad, no sobre la lista: un paciente que entró con
+cupón deja menos margen, y el tablero tiene que mostrar eso.
+
 **El peso de la mezcla es distinto en cada país.** En Argentina presencial es
 el 5% de las sesiones, así que el promedio ponderado es prácticamente el
 precio online. En Uruguay están casi 50/50 y difieren 7%, así que un margen
@@ -367,6 +372,24 @@ Hay **21 meses de tracking consistente**, así que el LTV por canal y cohorte
 está disponible desde el inicio.
 
 ---
+
+## 7 bis. Grano diario
+
+`marketing.metricas_diarias` guarda fecha, país y plataforma, con registros,
+pacientes nuevos y conversión. Nada más: margen, churn y LTV no significan
+nada en un día suelto.
+
+- El job la escribe en cada corrida sobre los **últimos 45 días**, no solo
+  sobre los días nuevos. Un pago tardío mueve la conversión de un día de hasta
+  30 días atrás, y una ventana más corta dejaría esos días congelados.
+- **El día es el día local (UTC−3).** En días UTC la noche de un día cae en el
+  siguiente y se borronea el patrón de fin de semana, que es justamente lo que
+  la pantalla mira.
+- La conversión diaria usa la misma ventana de 30 días y la misma curva de
+  madurez que la mensual. Casi todos los días de la ventana son cohortes de
+  menos de 30 días, así que vienen proyectados y se marcan como tales.
+- Las filas por plataforma llevan **solo volumen**: una conversión partida por
+  plataforma en un día suelto se apoya en un puñado de registros.
 
 ## 8. Tabla de agregados
 

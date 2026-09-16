@@ -119,33 +119,40 @@ const PROBES: Record<string, string> = {
   // question. This measures both over the same cohorts so the gap between
   // them is a number rather than a guess.
   mediana_compra_vs_sesion: `
-    SELECT l.paisDominio AS pais,
-           DATE_FORMAT(DATE_SUB(l.creacion, INTERVAL 3 HOUR), '%Y-%m') AS mes,
-           COUNT(*) AS cohorte,
-           COUNT(pago.primera) AS compraron,
-           COUNT(ses.primera) AS con_sesion,
-           ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
-             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, pago.primera)) OVER (), 1)
+    WITH base AS (
+      SELECT l.paisDominio AS pais,
+             DATE_FORMAT(DATE_SUB(l.creacion, INTERVAL 3 HOUR), '%Y-%m') AS mes,
+             TIMESTAMPDIFF(DAY, l.creacion, pago.primera) AS d_pago,
+             TIMESTAMPDIFF(DAY, l.creacion, ses.primera) AS d_ses
+        FROM login l
+        LEFT JOIN (SELECT id_paciente, MIN(creacion) AS primera
+                     FROM pacientes_pagos WHERE confirmado = 1
+                    GROUP BY id_paciente) pago ON pago.id_paciente = l.id
+        LEFT JOIN (SELECT id_paciente, MIN(fecha) AS primera
+                     FROM sesiones WHERE realizada = 1
+                    GROUP BY id_paciente) ses ON ses.id_paciente = l.id
+       WHERE l.tipo = 1 AND l.paisDominio IN ('AR', 'UY')
+         AND l.creacion >= '2026-05-01' AND l.creacion < '2026-08-01'
+    ), ranked AS (
+      SELECT pais, mes, d_pago, d_ses,
+             ROW_NUMBER() OVER (PARTITION BY pais, mes
+                                ORDER BY d_pago IS NULL, d_pago) AS r_pago,
+             COUNT(d_pago) OVER (PARTITION BY pais, mes) AS n_pago,
+             ROW_NUMBER() OVER (PARTITION BY pais, mes
+                                ORDER BY d_ses IS NULL, d_ses) AS r_ses,
+             COUNT(d_ses) OVER (PARTITION BY pais, mes) AS n_ses
+        FROM base
+    )
+    SELECT pais, mes, MAX(n_pago) AS compraron, MAX(n_ses) AS con_sesion,
+           MAX(CASE WHEN r_pago = GREATEST(1, FLOOR(n_pago * 0.5)) THEN d_pago END)
              AS mediana_pago,
-           ROUND(PERCENTILE_CONT(0.8) WITHIN GROUP (
-             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, pago.primera)) OVER (), 1)
+           MAX(CASE WHEN r_pago = GREATEST(1, FLOOR(n_pago * 0.8)) THEN d_pago END)
              AS p80_pago,
-           ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
-             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, ses.primera)) OVER (), 1)
+           MAX(CASE WHEN r_ses = GREATEST(1, FLOOR(n_ses * 0.5)) THEN d_ses END)
              AS mediana_sesion,
-           ROUND(PERCENTILE_CONT(0.8) WITHIN GROUP (
-             ORDER BY TIMESTAMPDIFF(DAY, l.creacion, ses.primera)) OVER (), 1)
+           MAX(CASE WHEN r_ses = GREATEST(1, FLOOR(n_ses * 0.8)) THEN d_ses END)
              AS p80_sesion
-      FROM login l
-      LEFT JOIN (SELECT id_paciente, MIN(creacion) AS primera
-                   FROM pacientes_pagos WHERE confirmado = 1
-                  GROUP BY id_paciente) pago ON pago.id_paciente = l.id
-      LEFT JOIN (SELECT id_paciente, MIN(fecha) AS primera
-                   FROM sesiones WHERE realizada = 1
-                  GROUP BY id_paciente) ses ON ses.id_paciente = l.id
-     WHERE l.tipo = 1 AND l.paisDominio IN ('AR', 'UY')
-       AND l.creacion >= '2026-05-01' AND l.creacion < '2026-08-01'
-     GROUP BY 1, 2 ORDER BY 1, 2`,
+      FROM ranked GROUP BY pais, mes ORDER BY pais, mes`,
 
   // How far cohorts actually get: patients per nth realized session. Feeds the
   // cohorte_sesiones table and says up front whether counting to 12 is

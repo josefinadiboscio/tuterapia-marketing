@@ -40,17 +40,28 @@ Los números son la interfaz. Se tratan con cuidado:
 color.** Cambiar el tema es editar `app/globals.css` y nada más; si para
 cambiar un color hay que abrir una pantalla, el sistema está roto.
 
-La rampa de marca sale del logo:
+La paleta sale del sitio:
 
 ```
---brand-50:  #F2FAF3      --brand-400: #75B781   ← principal
---brand-100: #CEE6D3      --brand-600: #4A8757
---brand-200: #A5D0AD      --brand-800: #2C5636
---brand-300: #95DB9F      --brand-900: #1B3722
+--cream:      #FDFAF6   fondo
+--surface:    #FFFFFF   cards
+--sage:       #84B686   volumen
+--sage-light: #A6C69F
+--forest:     #2D4435   texto fuerte, estados positivos
+--teal:       #397B7B   economía
+--teal-deep:  #285F5F
+--navy:       #1B2549   tinta de los números
+--gold:       #F5D28B   avisos
+--coral:      #E59A88   series secundarias, alertas suaves
+--muted:      #617869   etiquetas
+--border:     #D6D6CF
 ```
 
-- **Fondo claro en crema** (`#FAF7F0`), no blanco. Las superficies de card van
-  un punto más claras que el fondo.
+- **Fondo crema**, cards en blanco: las superficies son más claras que el
+  fondo, no más oscuras.
+- **Los números van en navy, no en gris.** Si la cifra pesa lo mismo que su
+  etiqueta, la pantalla se lee lavada y no hay jerarquía que valga.
+- **Las etiquetas van en `--muted`.** La cifra manda.
 - **Modo oscuro completo**, con toggle, respetando `prefers-color-scheme` por
   defecto. Una elección explícita gana sobre la del sistema y se recuerda.
 - **En oscuro el acento pasa a `--brand-300`.** `--brand-400` no llega al
@@ -76,12 +87,16 @@ significar cualquiera de las dos cosas.
 | Gráficos, superficies, acento | rampa de marca |
 | Todo lo demás | neutro |
 
-- Un solo acento, y usado poco.
 - Nada de gradientes, glassmorphism, sombras de colores ni fondos decorativos.
-- Las series de un gráfico usan **stops de la rampa de marca**, no colores
-  distintos.
-- **El color nunca es el único portador de información.** Como los deltas no
-  llevan color, la dirección la dan la palabra y la flecha.
+- **Cada bloque tiene su familia de color.** Volumen usa la familia verde
+  (`--sage`, `--sage-light`); Economía usa la teal (`--teal`, `--teal-deep`).
+  Son dos familias distintas porque son dos preguntas distintas, y mirar un
+  gráfico tiene que decir de cuál de las dos se está hablando antes de leer el
+  título.
+- Dentro de un bloque, las series usan tonos de **su** familia, no colores
+  sueltos. `--coral` queda para una serie secundaria cuando hacen falta tres.
+- **El color nunca es el único portador de información.** La tendencia de una
+  card la dan la palabra y la flecha; el color, si está, acompaña.
 
 ---
 
@@ -110,11 +125,25 @@ El motivo —por qué ese número puede moverse— va en un tooltip. Es la únic
 excepción a la regla de que un tooltip no guarda información: acá lo que guarda
 es la explicación, no el dato.
 
-- **En curso:** atenuado, con la palabra al lado y el motivo en el tooltip.
+- **En curso:** en el gráfico, la barra o el punto atenuados y una marca
+  discreta en la etiqueta del eje. En la card, nada: la regla de que ninguna
+  card lleva texto bajo el número no tiene excepciones.
 - **Sin datos suficientes:** no mostrar un número bajo. Mostrar cuánto falta
   ("faltan 138 registros").
 - **Vacío:** decir qué hacer para llenarlo, no mostrar un cero.
 - **Carga:** skeleton con la forma del contenido, no un spinner centrado.
+
+## Gráficos
+
+- **Barras angostas y separadas**, no bloques a todo el ancho. Una barra gorda
+  pesa más que el dato que representa.
+- **Cada barra lleva su valor arriba.** Si hay que estimar la altura contra un
+  eje, el número no está.
+- **Eje Y con dos o tres referencias**, no más. Es una escala, no una regla.
+- **El eje X lleva el nombre del mes abreviado en español** — abr, may, jun —
+  nunca `26-04`. El año aparece solo cuando la serie cruza de un año a otro.
+- **El mes en curso va atenuado** en su barra o su punto, con una marca
+  discreta en la etiqueta del eje. Nada de texto.
 
 ## Cards
 
@@ -133,18 +162,24 @@ tablero.
 
 Se organiza alrededor de **series temporales**, no de cards con deltas.
 
-- **Bloque Volumen:** Conversión, Registros, Pacientes nuevos, Pacientes
-  activos. Gráfico de barras.
-- **Bloque Economía:** CAC, Costo por registro, LTV. Gráfico de línea.
+- **Bloque Volumen**, en la familia verde: Registros, Pacientes nuevos,
+  Pacientes activos, Conversión — en ese orden. Registros primero porque es la
+  entrada del embudo; conversión última porque es la que resume a las otras.
+  Gráfico de barras.
+- **Bloque Economía**, en la familia teal: CAC, Costo por registro, LTV.
+  Gráfico de línea, y **la lectura automática va acá abajo**, sobre fondo
+  dorado suave — no al pie de la pantalla.
 - **Las cards son el selector.** Al clickear una, el gráfico de abajo muestra
   esa serie. Un gráfico por bloque, nunca dos.
 - **Selector de rango 6m / 12m / 24m** arriba, junto al de país.
 - **Anotaciones según la serie.** Con CAC seleccionado el gráfico dibuja el LTV
   como techo: mientras la línea esté abajo, cada paciente devuelve más de lo
   que costó. Con las demás series no hay banda.
-- **Línea de lectura automática** al pie, que interpreta las pendientes. Las
-  reglas están escritas en `METRICAS.md`: una frase que el tablero afirma tiene
-  que ser tan auditable como un número.
+- **Línea de lectura automática** debajo del gráfico de Economía, sobre fondo
+  dorado suave. Las reglas están escritas en `METRICAS.md`: una frase que el
+  tablero afirma tiene que ser tan auditable como un número.
+- **El selector de país arranca en Total** y recuerda la última elección entre
+  visitas.
 
 ---
 

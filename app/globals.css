@@ -4,97 +4,93 @@
  * Todo el color del tablero vive acá. Ningún componente escribe un color:
  * cambiar el tema es editar este archivo y nada más.
  *
- * El verde es marca, no estado. Se usa en gráficos, superficies y acentos.
- * Los deltas y las tendencias van en texto neutro con flecha, nunca en verde
- * ni en rojo: si el verde significa "Tu Terapia" y "positivo" a la vez, deja
- * de significar cualquiera de las dos. El rojo queda para alertas reales y el
- * ámbar para avisos.
+ * Cada bloque tiene su familia. Volumen es verde, Economía es teal: son dos
+ * preguntas distintas y el gráfico tiene que decir de cuál se habla antes de
+ * que alguien lea el título. Los números van en navy, nunca en gris — si la
+ * cifra pesa lo mismo que su etiqueta, la pantalla se lee lavada.
  */
 :root {
-  /* Rampa de marca, derivada del logo. */
-  --brand-50: #f2faf3;
-  --brand-100: #cee6d3;
-  --brand-200: #a5d0ad;
-  --brand-300: #95db9f;
-  --brand-400: #75b781;
-  --brand-600: #4a8757;
-  --brand-800: #2c5636;
-  --brand-900: #1b3722;
+  --cream: #fdfaf6;
+  --surface: #ffffff;
+  --sage: #84b686;
+  --sage-light: #a6c69f;
+  --forest: #2d4435;
+  --teal: #397b7b;
+  --teal-deep: #285f5f;
+  --navy: #1b2549;
+  --gold: #f5d28b;
+  --gold-soft: #fdf6e6;
+  --coral: #e59a88;
+  --muted: #617869;
+  --border: #d6d6cf;
+  --border-soft: #e8e8e1;
 
-  /* Superficies. Crema, no blanco; las cards un punto más claras que el fondo. */
-  --bg: #faf7f0;
-  --surface: #fffdf7;
-  --border: #e6e0d4;
-  --border-soft: #efeade;
-
-  /* Texto: cifra, etiqueta, secundario. */
-  --text: #1b1f1a;
-  --text-2: #5d6258;
-  --text-3: #8b9086;
-
-  /* Acento. En oscuro pasa a brand-300: brand-400 no llega al contraste. */
-  --accent: var(--brand-400);
-
-  /* Gráficos: stops de la misma rampa, nunca colores distintos. */
-  --chart-fill: var(--brand-200);
-  --chart-line: var(--brand-600);
-  --chart-band: var(--brand-100);
-
-  /* Semántica, fuera de la rampa de marca. */
-  --warn: #b45309;
-  --warn-bg: #fdf4e8;
-  --danger: #b42318;
-
-  /* Lo que todavía se puede mover. */
-  --muted: #aab0a4;
+  /* Roles derivados. Los componentes usan estos, no los de arriba. */
+  --bg: var(--cream);
+  --text: var(--navy);
+  --text-2: var(--muted);
+  --text-3: #8a9a8d;
+  --accent: var(--forest);
+  --warn: #9a6b1f;
+  --warn-bg: var(--gold-soft);
+  --danger: #b4503c;
+  --dim: #a8b2a9;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #14150f;
-    --surface: #1c1e16;
-    --border: #2f3229;
-    --border-soft: #262922;
+    --cream: #11150f;
+    --surface: #182016;
+    --sage: #84b686;
+    --sage-light: #5d8a60;
+    --forest: #a6c69f;
+    --teal: #4e9f9f;
+    --teal-deep: #6fbdbd;
+    --navy: #e8ecf4;
+    --gold: #f5d28b;
+    --gold-soft: #2a2416;
+    --coral: #e59a88;
+    --muted: #97a898;
+    --border: #2b332a;
+    --border-soft: #222a21;
 
-    --text: #edefe8;
-    --text-2: #a6aa9e;
-    --text-3: #7a7e74;
-
-    --accent: var(--brand-300);
-
-    --chart-fill: var(--brand-800);
-    --chart-line: var(--brand-300);
-    --chart-band: var(--brand-900);
-
-    --warn: #e0a44a;
-    --warn-bg: #2a2115;
-    --danger: #e88b80;
-
-    --muted: #6b6f66;
+    --bg: var(--cream);
+    --text: var(--navy);
+    --text-2: var(--muted);
+    --text-3: #75856f;
+    --accent: var(--forest);
+    --warn: var(--gold);
+    --warn-bg: var(--gold-soft);
+    --danger: var(--coral);
+    --dim: #6b7a6c;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #14150f;
-  --surface: #1c1e16;
-  --border: #2f3229;
-  --border-soft: #262922;
+  --cream: #11150f;
+  --surface: #182016;
+  --sage: #84b686;
+  --sage-light: #5d8a60;
+  --forest: #a6c69f;
+  --teal: #4e9f9f;
+  --teal-deep: #6fbdbd;
+  --navy: #e8ecf4;
+  --gold: #f5d28b;
+  --gold-soft: #2a2416;
+  --coral: #e59a88;
+  --muted: #97a898;
+  --border: #2b332a;
+  --border-soft: #222a21;
 
-  --text: #edefe8;
-  --text-2: #a6aa9e;
-  --text-3: #7a7e74;
-
-  --accent: var(--brand-300);
-
-  --chart-fill: var(--brand-800);
-  --chart-line: var(--brand-300);
-  --chart-band: var(--brand-900);
-
-  --warn: #e0a44a;
-  --warn-bg: #2a2115;
-  --danger: #e88b80;
-
-  --muted: #6b6f66;
+  --bg: var(--cream);
+  --text: var(--navy);
+  --text-2: var(--muted);
+  --text-3: #75856f;
+  --accent: var(--forest);
+  --warn: var(--gold);
+  --warn-bg: var(--gold-soft);
+  --danger: var(--coral);
+  --dim: #6b7a6c;
 }
 
 @theme inline {
@@ -106,25 +102,22 @@
   --color-texto: var(--text);
   --color-sec: var(--text-2);
   --color-ter: var(--text-3);
+  --color-dim: var(--dim);
+
+  --color-sage: var(--sage);
+  --color-sage-light: var(--sage-light);
+  --color-forest: var(--forest);
+  --color-teal: var(--teal);
+  --color-teal-deep: var(--teal-deep);
+  --color-navy: var(--navy);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-coral: var(--coral);
 
   --color-acento: var(--accent);
-  --color-brand-50: var(--brand-50);
-  --color-brand-100: var(--brand-100);
-  --color-brand-200: var(--brand-200);
-  --color-brand-300: var(--brand-300);
-  --color-brand-400: var(--brand-400);
-  --color-brand-600: var(--brand-600);
-  --color-brand-800: var(--brand-800);
-  --color-brand-900: var(--brand-900);
-
-  --color-chart-fill: var(--chart-fill);
-  --color-chart-line: var(--chart-line);
-  --color-chart-band: var(--chart-band);
-
   --color-warn: var(--warn);
   --color-warn-bg: var(--warn-bg);
   --color-danger: var(--danger);
-  --color-muted: var(--muted);
 }
 
 html {

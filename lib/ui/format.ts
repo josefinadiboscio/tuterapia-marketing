@@ -51,6 +51,21 @@ const MESES = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 
+const MESES_CORTOS = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sep", "oct", "nov", "dic",
+];
+
+/**
+ * '2026-04' as 'abr'. The year is only worth the space when the series
+ * crosses from one year into the next, which the caller decides.
+ */
+export function mesCorto(mes: string, conAnio = false): string {
+  const [year, month] = mes.split("-").map(Number);
+  const nombre = MESES_CORTOS[month - 1] ?? mes;
+  return conAnio ? `${nombre} ${String(year).slice(2)}` : nombre;
+}
+
 /** '2026-09' as 'septiembre 2026'. */
 export function nombreDeMes(mes: string): string {
   const [year, month] = mes.split("-").map(Number);

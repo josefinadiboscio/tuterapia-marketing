@@ -6,8 +6,12 @@ export default async function Home({
 }: {
   searchParams: Promise<{ pais?: string; mes?: string }>;
 }) {
+  // No country is forced here: an empty query lets the default apply, which is
+  // TOTAL or whatever was chosen last. Hardcoding AR here was overriding both.
   const { pais, mes } = await searchParams;
-  const query = new URLSearchParams({ pais: pais ?? "AR" });
+  const query = new URLSearchParams();
+  if (pais) query.set("pais", pais);
   if (mes) query.set("mes", mes);
-  redirect(`/general?${query}`);
+  const cola = query.toString();
+  redirect(cola ? `/general?${cola}` : "/general");
 }

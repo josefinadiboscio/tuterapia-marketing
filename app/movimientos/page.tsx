@@ -67,8 +67,7 @@ export default async function Movimientos({
             valor={porcentaje(actual.conversion)}
             delta={variacion(actual, previo, (r) => r.conversion)}
             comparativo={porcentaje(previo?.conversion)}
-            proyectada={actual.conversion_proyectada}
-            nota={actual.conversion_proyectada ? "en curso" : undefined}
+
           />
         </section>
 
@@ -99,9 +98,11 @@ export default async function Movimientos({
                       {porcentaje(p.registros / totalPlataformas)}
                     </span>
                     <span
-                      className="w-24 text-right text-sec"
+                      className={`w-24 text-right ${
+                        d === null ? "text-ter" : d >= 0 ? "text-forest" : "text-coral"
+                      }`}
                     >
-                      {d === null ? "—" : `${fmtDelta(d)} · ${entero(p.previos)}`}
+                      {d === null ? "—" : `${d >= 0 ? "↑" : "↓"} ${fmtDelta(d)} · ${entero(p.previos)}`}
                     </span>
                   </span>
                 </li>
@@ -117,33 +118,27 @@ export default async function Movimientos({
 function Metrica({
   titulo,
   valor,
-  nota,
   delta,
   comparativo,
-  proyectada = false,
 }: {
   titulo: string;
   valor: string;
-  nota?: string;
   delta: number | null;
   comparativo?: string;
-  proyectada?: boolean;
 }) {
   return (
     <div>
       <p className="text-xs text-ter">{titulo}</p>
-      <p
-        className={`mt-0.5 text-2xl ${proyectada ? "text-muted" : "text-texto"}`}
-      >
-        {valor}
-      </p>
+      <p className="mt-0.5 text-2xl text-texto">{valor}</p>
       {delta !== null ? (
-        <p className="mt-0.5 text-xs text-sec">
+        <p
+          className={`mt-0.5 text-xs ${delta >= 0 ? "text-forest" : "text-coral"}`}
+        >
           {delta >= 0 ? "↑" : "↓"} {fmtDelta(delta)}
           {comparativo ? ` · ${comparativo}` : ""}
         </p>
       ) : null}
-      {nota ? <p className="mt-0.5 text-xs text-muted">{nota}</p> : null}
+
     </div>
   );
 }

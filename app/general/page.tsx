@@ -14,15 +14,6 @@ export const dynamic = "force-dynamic";
  */
 const VOLUMEN = [
   {
-    id: "conversion",
-    nombre: "Conversión",
-    campo: (m: MesSerie) => m.conversion_cohorte,
-    formato: (n: number | null) => porcentaje(n),
-    unidad: "pp" as const,
-    definicion:
-      "De los que se registraron en el mes, cuántos compraron dentro de los 30 días.",
-  },
-  {
     id: "registros",
     nombre: "Registros",
     campo: (m: MesSerie) => m.registros,
@@ -46,6 +37,15 @@ const VOLUMEN = [
     formato: (n: number | null) => entero(n),
     unidad: "pct" as const,
     definicion: "Pacientes con al menos una sesión realizada en el mes.",
+  },
+  {
+    id: "conversion",
+    nombre: "Conversión",
+    campo: (m: MesSerie) => m.conversion_cohorte,
+    formato: (n: number | null) => porcentaje(n),
+    unidad: "pp" as const,
+    definicion:
+      "De los que se registraron en el mes, cuántos compraron dentro de los 30 días.",
   },
 ] as const;
 
@@ -137,9 +137,8 @@ export default async function General({
               tipo="linea"
               porPais={vista.porPais}
               techoLtv={serieEco === "cac"}
+              lectura={<Lectura vista={vista} cerrados={cerrados} />}
             />
-
-            <Lectura vista={vista} cerrados={cerrados} />
 
             {vista.plataformas.length > 0 ? (
               <section className="mt-10">
@@ -164,7 +163,7 @@ export default async function General({
                         </div>
                         <div className="mt-1 h-1 w-full bg-borde-suave">
                           <div
-                            className="h-1 bg-chart-fill"
+                            className="h-1 bg-sage"
                             style={{ width: `${(parte * 100).toFixed(1)}%` }}
                           />
                         </div>
@@ -202,6 +201,7 @@ function Bloque({
   tipo,
   porPais = [],
   techoLtv = false,
+  lectura,
 }: {
   titulo: string;
   metricas: readonly Metrica[];
@@ -214,23 +214,32 @@ function Bloque({
   tipo: "barras" | "linea";
   porPais?: VistaGeneral["porPais"];
   techoLtv?: boolean;
+  lectura?: React.ReactNode;
 }) {
   const metrica = metricas.find((m) => m.id === seleccionada)!;
   const dividido = clave === "eco" && porPais.length > 0;
+
+  // Volume speaks green, economy speaks teal: two questions, two families.
+  const familia =
+    clave === "vol"
+      ? { trazo: "stroke-sage", relleno: "fill-sage" }
+      : { trazo: "stroke-teal", relleno: "fill-teal" };
+  const segunda =
+    clave === "vol"
+      ? { trazo: "stroke-sage-light", relleno: "fill-sage-light" }
+      : { trazo: "stroke-teal-deep", relleno: "fill-teal-deep" };
 
   const series: Serie[] = dividido
     ? porPais.map((p, i) => ({
         nombre: p.pais,
         puntos: aPuntos(p.serie, metrica),
-        trazo: i === 0 ? "stroke-brand-400" : "stroke-brand-600",
-        relleno: i === 0 ? "fill-brand-400" : "fill-brand-600",
+        ...(i === 0 ? familia : segunda),
       }))
     : [
         {
           nombre: metrica.nombre,
           puntos: aPuntos(serie, metrica),
-          trazo: "stroke-chart-line",
-          relleno: "fill-chart-fill",
+          ...familia,
         },
       ];
 
@@ -273,6 +282,8 @@ function Bloque({
         techos={techos}
         formato={metrica.formato}
       />
+
+      {lectura}
     </section>
   );
 }
@@ -294,24 +305,23 @@ function Card({
 }) {
   const dividido = porPais.length > 0;
   const ultimo = serie.at(-1);
-  const enCurso = ultimo?.es_provisorio ?? false;
 
   return (
     <Link
       href={href}
       title={metrica.definicion}
       className={`block bg-surface px-4 py-3 ${
-        activa ? "ring-1 ring-acento" : "hover:bg-bg"
+        activa ? "ring-1 ring-acento" : "hover:bg-borde-suave"
       }`}
     >
-      <p className="text-xs text-ter">{metrica.nombre}</p>
+      <p className="text-xs text-sec">{metrica.nombre}</p>
 
       {dividido ? (
         <div className="mt-1 space-y-1">
           {porPais.map((p) => (
             <div key={p.pais} className="flex items-baseline justify-between">
-              <span className="text-xs text-ter">{p.pais}</span>
-              <span className="text-lg">
+              <span className="text-xs text-sec">{p.pais}</span>
+              <span className="text-lg text-texto">
                 {metrica.formato(ultimoValor(p.serie, metrica.campo))}
               </span>
             </div>
@@ -332,19 +342,9 @@ function Card({
         </div>
       ) : (
         <>
-          <p
-            className={`mt-1 text-2xl ${enCurso ? "text-muted" : "text-texto"}`}
-          >
+          <p className="mt-1 text-2xl text-texto">
             {metrica.formato(metrica.campo(ultimo ?? ({} as MesSerie)))}
           </p>
-          {enCurso ? (
-            <p
-              className="mt-0.5 text-xs text-muted"
-              title="El mes todavía no cerró: el número puede cambiar hasta fin de mes."
-            >
-              en curso
-            </p>
-          ) : null}
           <TendenciaTexto
             t={tendencia(
               cerrados.slice(-MESES_TENDENCIA).map(metrica.campo),
@@ -381,8 +381,15 @@ function TendenciaTexto({ t, prefijo }: { t: Tendencia; prefijo?: string }) {
         ? `${t.cambio >= 0 ? "+" : "−"}${Math.abs(t.cambio * 100).toFixed(1)} pp`
         : `${t.cambio >= 0 ? "+" : "−"}${Math.abs(t.cambio * 100).toFixed(0)}%`;
 
+  const tono =
+    t.direccion === "creciendo"
+      ? "text-forest"
+      : t.direccion === "bajando"
+        ? "text-coral"
+        : "text-sec";
+
   return (
-    <p className="mt-1 text-xs text-sec">
+    <p className={`mt-1 text-xs ${tono}`}>
       {prefijo ? `${prefijo} · ` : ""}
       {flecha} {t.direccion} · {cambio} en {t.meses}m
     </p>
@@ -417,7 +424,7 @@ function Lectura({
   if (!texto) return null;
 
   return (
-    <p className="mt-8 border-l-2 border-acento pl-3 text-sm text-texto">
+    <p className="mt-4 border-l-2 border-gold bg-gold-soft px-3 py-2 text-sm text-texto">
       {texto}
     </p>
   );

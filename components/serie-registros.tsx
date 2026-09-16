@@ -61,7 +61,7 @@ export function SerieRegistros({
               y={alto - altura}
               width={anchoBarra}
               height={altura}
-              className="fill-chart-fill"
+              className="fill-sage"
             />
           );
         })}
@@ -69,7 +69,7 @@ export function SerieRegistros({
           d={linea}
           fill="none"
           strokeWidth={1.5}
-          className="stroke-chart-line"
+          className="stroke-forest"
         />
       </svg>
 

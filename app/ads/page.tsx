@@ -2,13 +2,10 @@ import { Nav, Selectores, contexto } from "@/components/nav";
 import { TablaAds } from "@/components/tabla-ads";
 import { EditorGasto } from "@/components/editor-gasto";
 import { leerAds, rangoPorDefecto } from "@/lib/ads";
-import { leerGastoCargado } from "./acciones";
+import { leerGastoVigente } from "./acciones";
 import { entero, usd, decimal, SIN_DATO } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
-
-const PLATAFORMAS_CON_GASTO = ["Meta", "Google Ads", "TikTok"];
-const PAISES_REALES = ["AR", "UY"];
 
 export default async function Ads({
   searchParams,
@@ -22,9 +19,9 @@ export default async function Ads({
   const desde = fecha(params.desde) ?? porDefecto.desde;
   const hasta = fecha(params.hasta) ?? porDefecto.hasta;
 
-  const [vista, cargado] = await Promise.all([
+  const [vista, vigentes] = await Promise.all([
     leerAds(ctx.pais, desde, hasta),
-    gastoCargado(desde, hasta),
+    leerGastoVigente(),
   ]);
 
   const deltaCac =
@@ -71,8 +68,8 @@ export default async function Ads({
           <span className="text-ter">{vista.dias} días</span>
         </form>
 
-        <div className="mt-3">
-          <EditorGasto desde={desde} hasta={hasta} cargado={cargado} />
+        <div className="mt-4">
+          <EditorGasto vigentes={vigentes} />
         </div>
 
         <section className="mt-5 grid gap-[10px] md:grid-cols-4">
@@ -150,24 +147,6 @@ function Hero({
       <p className={`mt-0.5 text-xs ${color}`}>{pie}</p>
     </div>
   );
-}
-
-/** Everything already stored for the range, keyed so the editor can look it up. */
-async function gastoCargado(
-  desde: string,
-  hasta: string,
-): Promise<Record<string, number>> {
-  const partes = await Promise.all(
-    PAISES_REALES.flatMap((pais) =>
-      PLATAFORMAS_CON_GASTO.map(async (plataforma) => {
-        const dias = await leerGastoCargado(pais, plataforma, desde, hasta);
-        return Object.fromEntries(
-          Object.entries(dias).map(([f, m]) => [`${pais}|${plataforma}|${f}`, m]),
-        );
-      }),
-    ),
-  );
-  return Object.assign({}, ...partes);
 }
 
 function fecha(valor: string | undefined): string | null {

@@ -6,56 +6,66 @@ import { withDb } from "@/lib/db";
 /**
  * The two things Ads writes.
  *
- * Both are upserts on the primary key, so saving the same day twice lands on
- * the same state. Everything downstream — the period totals, the CAC, the
- * proportional split among campaigns — is summed at read time, so a corrected
- * day changes every number that depends on it with nothing to recompute.
+ * Spend is a rate, not a diary: one figure per platform and country says what
+ * is being spent per day, and every day from its start date takes it. Changing
+ * it changes every day it covers, and nothing has to be recomputed because the
+ * totals are summed at read time.
+ *
+ * A new figure inserts a new row rather than overwriting the previous one, so
+ * a past period keeps the rate it actually had — the same vigencia rule as
+ * marketing.parametros.
  */
 
 const PAISES = ["AR", "UY"];
+/** Instagram is covered by Meta's budget and never carries its own figure. */
 const PLATAFORMAS = ["Meta", "Google Ads", "TikTok"];
 
+export type Vigente = {
+  pais: string;
+  plataforma: string;
+  monto: number | null;
+  desde: string | null;
+};
+
 export async function guardarGasto(_previo: unknown, form: FormData) {
-  const pais = String(form.get("pais") ?? "");
-  const plataforma = String(form.get("plataforma") ?? "");
+  const desde = String(form.get("desde") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) return { error: "Fecha inválida." };
 
-  if (!PAISES.includes(pais)) return { error: "País inválido." };
-  // Instagram is covered by Meta's budget and never carries its own row.
-  if (!PLATAFORMAS.includes(plataforma)) return { error: "Plataforma inválida." };
+  // One field per country and platform: monto__AR__Meta.
+  const filas: { pais: string; plataforma: string; monto: number }[] = [];
+  for (const pais of PAISES) {
+    for (const plataforma of PLATAFORMAS) {
+      const bruto = form.get(`monto__${pais}__${plataforma}`);
+      if (bruto === null) continue;
 
-  // One field per day: monto__2026-09-15.
-  const dias: { fecha: string; monto: number }[] = [];
-  for (const [clave, valor] of form.entries()) {
-    if (!clave.startsWith("monto__")) continue;
-    const fecha = clave.slice("monto__".length);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
+      const texto = String(bruto).trim().replace(",", ".");
+      if (texto === "") continue;
 
-    const texto = String(valor).trim().replace(",", ".");
-    if (texto === "") continue;
-
-    const monto = Number(texto);
-    if (!Number.isFinite(monto) || monto < 0) {
-      return { error: `Monto inválido en ${fecha}.` };
+      const monto = Number(texto);
+      if (!Number.isFinite(monto) || monto < 0) {
+        return { error: `Monto inválido en ${plataforma} · ${pais}.` };
+      }
+      filas.push({ pais, plataforma, monto });
     }
-    dias.push({ fecha, monto });
   }
 
-  if (dias.length === 0) return { error: "No se cargó ningún monto." };
+  if (filas.length === 0) return { error: "No se cargó ningún monto." };
 
   await withDb(async (db) => {
-    for (const d of dias) {
+    for (const f of filas) {
       await db.query(
-        `insert into marketing.gastos_diarios (fecha, pais, plataforma, monto_usd)
+        `insert into marketing.gasto_vigente
+           (pais, plataforma, monto_usd, vigente_desde)
          values ($1, $2, $3, $4)
-         on conflict (fecha, pais, plataforma) do update set
-           monto_usd = excluded.monto_usd, actualizado_en = now()`,
-        [d.fecha, pais, plataforma, d.monto],
+         on conflict (pais, plataforma, vigente_desde) do update set
+           monto_usd = excluded.monto_usd, cargado_en = now()`,
+        [f.pais, f.plataforma, f.monto, desde],
       );
     }
   });
 
   revalidatePath("/ads");
-  return { ok: `${dias.length} días guardados en ${plataforma} · ${pais}.` };
+  return { ok: `Guardado. Rige desde el ${desde}.` };
 }
 
 export async function guardarDescripcion(_previo: unknown, form: FormData) {
@@ -83,20 +93,34 @@ export async function guardarDescripcion(_previo: unknown, form: FormData) {
   return { ok: "Guardado." };
 }
 
-/** What is already loaded for a platform and country, to fill the form. */
-export async function leerGastoCargado(
-  pais: string,
-  plataforma: string,
-  desde: string,
-  hasta: string,
-): Promise<Record<string, number>> {
+/** The figure in force today for each platform and country, to fill the form. */
+export async function leerGastoVigente(): Promise<Vigente[]> {
   return withDb(async (db) => {
-    const { rows } = await db.query<{ fecha: string; monto_usd: string }>(
-      `select fecha::text, monto_usd::text
-         from marketing.gastos_diarios
-        where pais = $1 and plataforma = $2 and fecha >= $3 and fecha <= $4`,
-      [pais, plataforma, desde, hasta],
+    const { rows } = await db.query<{
+      pais: string;
+      plataforma: string;
+      monto_usd: string;
+      vigente_desde: string;
+    }>(
+      `select distinct on (pais, plataforma)
+              pais, plataforma, monto_usd::text, vigente_desde::text
+         from marketing.gasto_vigente
+        where vigente_desde <= current_date
+        order by pais, plataforma, vigente_desde desc`,
     );
-    return Object.fromEntries(rows.map((r) => [r.fecha, Number(r.monto_usd)]));
+
+    const porClave = new Map(rows.map((r) => [`${r.pais}|${r.plataforma}`, r]));
+
+    return PAISES.flatMap((pais) =>
+      PLATAFORMAS.map((plataforma) => {
+        const r = porClave.get(`${pais}|${plataforma}`);
+        return {
+          pais,
+          plataforma,
+          monto: r ? Number(r.monto_usd) : null,
+          desde: r?.vigente_desde ?? null,
+        };
+      }),
+    );
   });
 }

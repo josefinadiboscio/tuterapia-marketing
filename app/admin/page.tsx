@@ -3,7 +3,6 @@ import { leerAdmin } from "@/lib/admin";
 import { entero, usd, fecha, fechaHora, nombreDeMes } from "@/lib/ui/format";
 import {
   accionNuevaVigencia,
-  accionGuardarGasto,
   accionGuardarPatron,
   accionBorrarPatron,
 } from "./actions";
@@ -71,52 +70,14 @@ export default async function Admin({
           </section>
         )}
 
-        {/* Gasto */}
+        {/* Gasto: histórico. Se carga en Ads, no acá. */}
         <section>
-          <Etiqueta>Gasto semanal en USD</Etiqueta>
-
-          <form
-            action={accionGuardarGasto}
-            className="mt-3 flex flex-wrap items-end gap-3 text-sm"
-          >
-            <Campo label="Semana (primer día)">
-              <input type="date" name="semana" required className={INPUT} />
-            </Campo>
-            <Campo label="País">
-              <select name="pais" className={INPUT}>
-                {PAISES.map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
-              </select>
-            </Campo>
-            <Campo label="Canal">
-              <input
-                name="canal"
-                required
-                placeholder="Meta"
-                className={INPUT}
-                list="plataformas"
-              />
-              <datalist id="plataformas">
-                {[...new Set(admin.mapping.map((m) => m.plataforma))].map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            </Campo>
-            <Campo label="Monto USD">
-              <input
-                type="number"
-                name="monto_usd"
-                min="0"
-                step="0.01"
-                required
-                className={`${INPUT} tabular-nums`}
-              />
-            </Campo>
-            <button type="submit" className={BOTON}>
-              Guardar
-            </button>
-          </form>
+          <Etiqueta>Gasto semanal en USD · histórico</Etiqueta>
+          <p className="mt-1 text-sm text-sec">
+            El gasto de hoy se declara en Ads, una vez por plataforma y país.
+            Esto es lo que quedó cargado por semana antes de ese cambio, y sigue
+            valiendo para los días que cubre.
+          </p>
 
           {admin.gastos.length > 0 ? (
             <table className="mt-5 w-full text-sm">
@@ -152,8 +113,7 @@ export default async function Admin({
             </table>
           ) : (
             <p className="mt-4 text-sm text-sec">
-              Sin gasto cargado. Cargá una semana, o importá la planilla con
-              scripts/importar-gastos.ts, y el CAC aparece en General.
+              Sin gasto semanal cargado.
             </p>
           )}
         </section>

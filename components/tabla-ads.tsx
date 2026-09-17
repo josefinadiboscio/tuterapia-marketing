@@ -107,7 +107,7 @@ export function TablaAds({ filas }: { filas: FilaPlataforma[] }) {
                 </div>
               </td>
               <td className="py-2 text-center">
-                <Chispa valores={f.tendencia} />
+                <Chispa valores={f.tendencia} roas={f.tendenciaRoas} />
               </td>
               <td className="py-2 text-right">{entero(f.registros)}</td>
               <td className="py-2 text-right">{entero(f.ventas)}</td>
@@ -146,7 +146,7 @@ function Campana({ c }: { c: FilaUtm }) {
           <Descripcion utm={c.utm_source} valor={c.descripcion} />
         </td>
         <td className="py-1.5 text-center">
-          <Chispa valores={c.tendencia} />
+          <Chispa valores={c.tendencia} roas={c.tendenciaRoas} />
         </td>
         <td className="py-1.5 text-right text-sec">{entero(c.registros)}</td>
         <td className="py-1.5 text-right text-sec">{entero(c.ventas)}</td>

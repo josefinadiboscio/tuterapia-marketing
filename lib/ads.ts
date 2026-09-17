@@ -1,5 +1,6 @@
 import { withDb } from "@/lib/db";
 import { resolverPlataforma, type UtmMapping } from "@/lib/utm";
+import { MUESTRA_MINIMA, ESCALAR, MANTENER, APAGAR } from "@/lib/umbrales";
 
 /**
  * Ads over a free date range.
@@ -15,14 +16,14 @@ import { resolverPlataforma, type UtmMapping } from "@/lib/utm";
  * split among campaigns, and Instagram's own row shows the share it drew.
  */
 
-/** Below this, a row gets a verdict of "sin dato" and says what it is missing. */
-export const MUESTRA_MINIMA = 30;
-
-/** Growth Control's thresholds, on LTV/CAC. */
-export const ESCALAR = 1.8;
-export const MANTENER = 1.3;
-/** Three weeks under this in a row is a switch-off, not a trim. */
-export const APAGAR = 1.0;
+// Growth Control's thresholds live in lib/umbrales so the browser can read
+// them without pulling the database client in with them.
+export {
+  MUESTRA_MINIMA,
+  ESCALAR,
+  MANTENER,
+  APAGAR,
+} from "@/lib/umbrales";
 
 /** Meta pays for Instagram, so they share one pool of spend. */
 export const PLATAFORMAS_DE_META = ["Meta", "Instagram"];
@@ -42,6 +43,8 @@ export type FilaUtm = {
   roas: number | null;
   /** Sales per week over the last six, oldest first. */
   tendencia: number[];
+  /** What each of those weeks returned per dollar; NaN where nothing was spent. */
+  tendenciaRoas: number[];
   estado: Estado;
   faltanRegistros: number;
   lectura: string;
@@ -61,6 +64,7 @@ export type FilaPlataforma = {
   cac: number | null;
   roas: number | null;
   tendencia: number[];
+  tendenciaRoas: number[];
   estado: Estado;
   faltanRegistros: number;
   lectura: string;
@@ -83,6 +87,37 @@ export type VistaAds = {
   filas: FilaPlataforma[];
   apagadas: FilaPlataforma[];
 };
+
+/**
+ * What a given day cost, per platform and country, between two dates.
+ *
+ * Two sources with a clear precedence. From the day a rate takes effect the
+ * rate is the answer: it is what somebody declared they are spending, and
+ * changing it changes every day it covers. Before any rate starts, the day
+ * rows carried over from the sheet answer instead.
+ *
+ * Neither invents anything. A platform with no rate and no row spent nothing
+ * that day, which is exactly what TikTok did for most of the year.
+ */
+function gastoPorDia(desde: string, hasta: string): string {
+  return `
+  select d.fecha, d.pais, d.plataforma, d.monto_usd
+    from marketing.gastos_diarios d
+   where d.fecha >= ${desde} and d.fecha <= ${hasta}
+     and not exists (
+       select 1 from marketing.gasto_vigente v
+        where v.pais = d.pais and v.plataforma = d.plataforma
+          and v.vigente_desde <= d.fecha)
+  union all
+  select f.fecha, v.pais, v.plataforma, v.monto_usd
+    from generate_series(${desde}::date, ${hasta}::date, '1 day') as f(fecha)
+    join lateral (
+      select distinct on (g.pais, g.plataforma) g.pais, g.plataforma, g.monto_usd
+        from marketing.gasto_vigente g
+       where g.vigente_desde <= f.fecha
+       order by g.pais, g.plataforma, g.vigente_desde desc
+    ) v on true`;
+}
 
 const ORDEN = ["Meta", "Instagram", "Google Ads", "TikTok"];
 
@@ -117,8 +152,8 @@ export async function leerAds(
           // from the total alone.
           `select plataforma, sum(monto_usd)::text as monto,
                   count(distinct fecha)::text as dias
-             from marketing.gastos_diarios
-            where pais = any($3) and fecha >= $1 and fecha <= $2
+             from (${gastoPorDia("$1", "$2")}) g
+            where pais = any($3)
             group by plataforma`,
           [desde, hasta, paises],
         ),
@@ -178,15 +213,15 @@ export async function leerAds(
         ),
         db.query<{ monto: string }>(
           `select coalesce(sum(monto_usd), 0)::text as monto
-             from marketing.gastos_diarios
-            where pais = any($3) and fecha >= $1 and fecha <= $2`,
+             from (${gastoPorDia("$1", "$2")}) g
+            where pais = any($3)`,
           [previo.desde, previo.hasta, paises],
         ),
         db.query<{ semana: string; plataforma: string; monto: string }>(
           `select to_char(date_trunc('week', fecha), 'YYYY-MM-DD') as semana,
                   plataforma, sum(monto_usd)::text as monto
-             from marketing.gastos_diarios
-            where pais = any($2) and fecha > $1::date - 42 and fecha <= $1::date
+             from (${gastoPorDia("($1::date - 41)", "$1")}) g
+            where pais = any($2)
             group by 1, 2`,
           [hasta, paises],
         ),
@@ -321,7 +356,8 @@ export async function leerAds(
 
       const nombres = fuentes.map(([s]) => s);
       const serie = serieDe(nombres);
-      const estado = estadoDe(roas, registros, roasSemanalDe(nombres, plataforma));
+      const serieRoas = roasSemanalDe(nombres, plataforma);
+      const estado = estadoDe(roas, registros, serieRoas);
 
       const campanas: FilaUtm[] = fuentes
         .map(([source, v]) => {
@@ -331,11 +367,8 @@ export async function leerAds(
           const cacUtm =
             v.ventas > 0 && gastoEstimado > 0 ? gastoEstimado / v.ventas : null;
           const roasUtm = cacUtm !== null && ltv !== null ? ltv / cacUtm : null;
-          const estadoUtm = estadoDe(
-            roasUtm,
-            v.registros,
-            roasSemanalDe([source], plataforma),
-          );
+          const serieRoasUtm = roasSemanalDe([source], plataforma);
+          const estadoUtm = estadoDe(roasUtm, v.registros, serieRoasUtm);
           return {
             utm_source: source === "" ? "(sin tag)" : source,
             descripcion: notas.get(source) ?? null,
@@ -347,6 +380,7 @@ export async function leerAds(
             cac: cacUtm,
             roas: roasUtm,
             tendencia: serieDe([source]),
+            tendenciaRoas: serieRoasUtm,
             estado: estadoUtm,
             faltanRegistros: Math.max(0, MUESTRA_MINIMA - v.registros),
             lectura: lecturaDe(estadoUtm, {
@@ -374,6 +408,7 @@ export async function leerAds(
         cac,
         roas,
         tendencia: serie,
+        tendenciaRoas: serieRoas,
         estado,
         faltanRegistros: Math.max(0, MUESTRA_MINIMA - registros),
         lectura: lecturaDe(estado, {

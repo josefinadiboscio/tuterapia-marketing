@@ -7,9 +7,10 @@ import { LOCAL_UTC_OFFSET_HOURS } from "@/lib/queries/shared";
  * screens. It can never push the navigation around, so every image carries its
  * own width and height and the row is bottom-aligned — feet on the divider.
  *
- * Four people, one per stretch of the day, always in the same order, all four
- * at the same weight. Lighting up the current one made it read as a state —
- * something you were meant to look at — when it is a drawing on a line.
+ * Four people, one per stretch of the day, always in the same order and all
+ * four at full strength. They were faded at first and one of them lit up with
+ * the hour, which made the drawing read as a state — something you were meant
+ * to look at — instead of a drawing standing on a line.
  *
  * Which pose shows is the day of the month modulo three: stable across
  * reloads, different tomorrow, and the same day for all four so they change
@@ -67,7 +68,7 @@ export function Mascotas({ ahora = new Date() }: { ahora?: Date }) {
             height={t.alto}
             alt=""
             draggable={false}
-            className="mascota block select-none opacity-35"
+            className="mascota block select-none"
           />
         );
       })}

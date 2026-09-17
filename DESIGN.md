@@ -373,10 +373,10 @@ alternativo, sin animaciones, y se esconden por debajo de 1100px para que
 nunca empujen la navegación.
 
 Uno por franja del día, siempre en el mismo orden: noche, mañana, tarde,
-creando. **Las cuatro al 35%, al mismo peso.** Prender la de la franja actual
-la hacía leer como un estado —algo que hay que mirar— cuando es un dibujo
-apoyado en una línea. Son cuatro personas distintas —tres nenas y un nene— y
-no se reordenan.
+creando. **Las cuatro al mismo peso y a opacidad plena.** Estuvieron al 35% con
+la de la franja actual prendida: así el dibujo se leía como un estado —algo que
+hay que mirar— en lugar de un dibujo apoyado en una línea. Son cuatro personas
+distintas —tres nenas y un nene— y no se reordenan.
 
 Cada franja tiene tres poses. Cuál se ve sale del día del mes módulo 3: estable
 al recargar, distinta mañana, y la misma para las cuatro así cambian juntas.

@@ -521,8 +521,38 @@ lee la pantalla. Dio `todo_coincide: true`:
 | 5ª sesión | 2026-08-02 | 633 | 207 | 32,7% | 23,0% |
 | 6ª sesión | 2026-07-24 | 487 | 126 | 25,9% | 20,3% |
 
-El escalón más caro es 1ª → 2ª con 34,9%. El no-show entre pagar y sentarse es
-5,0%, mucho más chico de lo que se temía.
+El escalón más caro es 1ª → 2ª con 34,9%.
+
+### Por qué el escalón compra → 1ª sesión da solo 5%
+
+Es correcto, y vale explicarlo porque el número parece bajo. Medido sobre los
+1.376 compradores de AR con al menos 10 días de antigüedad:
+
+| Caso | Compradores |
+|---|---|
+| Primera sesión **después** de pagar | 1.151 |
+| Primera sesión **el mismo día** que pagó | 156 |
+| Primera sesión **antes** de pagar | **0** |
+| Sin ninguna sesión realizada | 69 (el 5,0%) |
+
+**Nadie se sienta antes de pagar.** Cero de 1.376: en esta plataforma agendar
+requiere paquete comprado, así que la secuencia siempre es comprar → agendar →
+asistir. La etapa no está inflada por sesiones de cortesía, que era la primera
+sospecha.
+
+Los 69 que no tienen ninguna sesión realizada se parten en dos problemas
+distintos: **41 nunca agendaron** y **28 agendaron y la sesión nunca se marcó
+realizada**. El segundo grupo es el no-show de verdad; el primero es alguien
+que pagó y no eligió horario.
+
+**El flag `realizada` discrimina de verdad**, que es la otra cosa que había que
+descartar: entre estos mismos compradores hay 3.908 sesiones con
+`realizada = 1` y 788 con `realizada = 0`. Si el flag se marcara solo, todas
+estarían en 1 y todas las etapas del embudo estarían mal.
+
+Si se exigiera que la primera sesión sea **estrictamente posterior** al día del
+pago, la caída daría 16,4%. No se hace: las 156 del mismo día son sesiones
+reales, y excluirlas sería inventar una pérdida que no existe.
 
 No vuelven tras la 1ª, mismo corte: **333 personas, 34,8%**, sobre 956
 compradores con 1ª sesión, hasta compras del 2026-08-18.

@@ -52,26 +52,36 @@ export function madurez(nro: number): number {
 }
 
 /**
- * The no-return card only counts buyers with at least this many days behind
- * them. Enough for the median buyer to have had a first session and a second:
- * ten days plus nine, with room to spare.
+ * The no-return card has no clock of its own any more: it is the first-session
+ * row of the table, so it inherits `madurez(2)` — nineteen days, enough for
+ * the median buyer to have had a first session and a second. It used to carry
+ * its own thirty-day cut and therefore its own, different number.
  */
-const DIAS_PARA_VOLVER = 30;
 
 export type FilaEtapa = {
   nro: number;
   etiqueta: string;
-  /** Buyers of the window old enough for this stage. null: none are. */
+  /** Buyers of the window old enough to have reached this stage. */
   n: number | null;
   llegaron: number | null;
-  /** How many of this row's base had reached the stage before it. */
-  previa: number | null;
   /** Share of this row's own base that got here. */
   pctDelTotal: number | null;
-  cayeron: number | null;
-  /** Share of the previous stage, on this row's base, that stopped here. */
-  caida: number | null;
-  /** Change of that drop against the previous period, in points. */
+  /**
+   * People whose therapy ENDED here: they reached this stage and never the
+   * next one. This is the one number the table is read for — "how many did
+   * only one session" — and everything else on the row is measured to match
+   * it.
+   */
+  seQuedaron: number | null;
+  /** Of the buyers old enough to answer the question. The headline share. */
+  pctSeQuedaron: number | null;
+  /** Of the people who reached this stage. The same fact, other denominator. */
+  pctDeLosQueLlegaron: number | null;
+  /** Buyers the share above divides by. */
+  nQuedaron: number | null;
+  /** Last purchase day that can answer whether they came back. */
+  corteQuedaron: string | null;
+  /** Change of `pctSeQuedaron` against the previous period, in points. */
   deltaPp: number | null;
   /** Last day of purchase this row can include. */
   corte: string | null;
@@ -91,7 +101,7 @@ export type NoVuelven = {
   personas: number;
   pct: number;
   deltaPp: number | null;
-  /** Buyers with a first session the figure rests on. */
+  /** Buyers the share divides by. */
   base: number;
   /** Last day of purchase counted. */
   hasta: string;
@@ -141,8 +151,9 @@ export async function leerFunnel(
   const desde = sumarDias(hasta, -(periodo - 1));
   const previo = { desde: sumarDias(desde, -periodo), hasta: sumarDias(desde, -1) };
 
-  // Stage k can only count buyers who are madurez(k) days old.
-  const cortes = Array.from({ length: ULTIMA_ETAPA + 1 }, (_, nro) =>
+  // One cut past the last visible stage: knowing who STOPPED at the sixth
+  // session means knowing who did not reach the seventh.
+  const cortes = Array.from({ length: ULTIMA_ETAPA + 2 }, (_, nro) =>
     minimo(hasta, sumarDias(hoy, -madurez(nro))),
   );
   // Every day of the previous period is older than the whole period, which is
@@ -150,13 +161,12 @@ export async function leerFunnel(
   const cortesPrevios = cortes.map(() => previo.hasta);
 
   return withDb(async (db) => {
-    const [actual, anterior, tiempos, tiemposPrevios, retorno, meses] =
+    const [actual, anterior, tiempos, tiemposPrevios, meses] =
       await Promise.all([
         etapas(db, paises, desde, cortes),
         etapas(db, paises, previo.desde, cortesPrevios),
         histograma(db, paises, desde, cortes),
         histograma(db, paises, previo.desde, cortesPrevios),
-        sinRetorno(db, paises, desde, hasta, previo, hoy),
         db.query<{ mes: string }>(
           `select distinct to_char(mes, 'YYYY-MM') as mes
              from marketing.metricas_mensuales
@@ -165,6 +175,22 @@ export async function leerFunnel(
       ]);
 
     const filas = armarEtapas(actual, anterior, cortes);
+
+    // The card IS the first-session row of the table, not a second
+    // calculation of the same thing. Two numbers for one fact on one screen is
+    // exactly what this project forbids, and it had two: 333 here and 398
+    // there, because this one used its own thirty-day cut.
+    const primera = filas[1];
+    const noVuelven: NoVuelven | null =
+      primera && primera.seQuedaron !== null && primera.pctSeQuedaron !== null
+        ? {
+            personas: primera.seQuedaron,
+            pct: primera.pctSeQuedaron,
+            deltaPp: primera.deltaPp,
+            base: primera.nQuedaron ?? 0,
+            hasta: primera.corteQuedaron ?? hasta,
+          }
+        : null;
 
     return {
       periodo,
@@ -175,7 +201,7 @@ export async function leerFunnel(
         actual.get(0)?.base ?? 0,
         anterior.get(0)?.base ?? 0,
       ),
-      noVuelven: retorno,
+      noVuelven,
       etapas: filas,
       tiempos: armarTiempos(tiempos, tiemposPrevios),
       lectura: lecturaDe(filas),
@@ -238,49 +264,57 @@ async function etapas(
   );
 }
 
+/**
+ * One criterion for the whole table: what happened to the people AT each
+ * stage.
+ *
+ * The row for "1ª sesión" is about the people who did a first session — how
+ * many got there and how many of them ended there. It is not about the step
+ * INTO the stage, which is the same table read backwards and the reason the
+ * first row looked like it said 5% of people drop at the first session. That
+ * 5% is real and belongs to "Compraron": paid and never sat down.
+ *
+ * "Ended here" is measured with the NEXT stage's maturity, not this one's.
+ * Somebody who bought twelve days ago has reached a first session and has not
+ * had time for a second; counting them as "stopped at one" would be counting
+ * the calendar.
+ */
 function armarEtapas(
   actual: Map<number, Conteo>,
   anterior: Map<number, Conteo>,
   cortes: string[],
 ): FilaEtapa[] {
-  const caidaDe = (c: Conteo | undefined, nro: number): number | null => {
-    if (nro === 0 || !c || c.previa === 0) return null;
-    return (c.previa - c.actual) / c.previa;
+  const quedadosEn = (fuente: Map<number, Conteo>, nro: number) => {
+    const sig = fuente.get(nro + 1);
+    if (!sig || sig.base === 0 || sig.previa === 0) return null;
+    const cuantos = Math.max(0, sig.previa - sig.actual);
+    return {
+      cuantos,
+      llegaronAca: sig.previa,
+      compradores: sig.base,
+      pct: cuantos / sig.base,
+      pctDeLosQueLlegaron: cuantos / sig.previa,
+    };
   };
 
   return ETIQUETA_ETAPA.map((etiqueta, nro) => {
     const c = actual.get(nro);
     const vacia = !c || c.base === 0;
-
-    if (nro === 0) {
-      return {
-        nro,
-        etiqueta,
-        n: vacia ? null : c!.base,
-        llegaron: vacia ? null : c!.base,
-        previa: null,
-        pctDelTotal: vacia ? null : 1,
-        cayeron: null,
-        caida: null,
-        deltaPp: null,
-        corte: cortes[nro] ?? null,
-      };
-    }
-
-    const caida = caidaDe(c, nro);
-    const caidaPrevia = caidaDe(anterior.get(nro), nro);
+    const q = quedadosEn(actual, nro);
+    const qPrevio = quedadosEn(anterior, nro);
 
     return {
       nro,
       etiqueta,
       n: vacia ? null : c!.base,
-      llegaron: vacia ? null : c!.actual,
-      previa: vacia ? null : c!.previa,
-      pctDelTotal: vacia ? null : c!.actual / c!.base,
-      cayeron: vacia || caida === null ? null : c!.previa - c!.actual,
-      caida,
-      deltaPp:
-        caida === null || caidaPrevia === null ? null : caida - caidaPrevia,
+      llegaron: vacia ? null : nro === 0 ? c!.base : c!.actual,
+      pctDelTotal: vacia ? null : nro === 0 ? 1 : c!.actual / c!.base,
+      seQuedaron: q?.cuantos ?? null,
+      pctSeQuedaron: q?.pct ?? null,
+      pctDeLosQueLlegaron: q?.pctDeLosQueLlegaron ?? null,
+      nQuedaron: q?.compradores ?? null,
+      corteQuedaron: cortes[nro + 1] ?? null,
+      deltaPp: q && qPrevio ? q.pct - qPrevio.pct : null,
       corte: cortes[nro] ?? null,
     };
   });
@@ -366,107 +400,47 @@ function percentil(
 }
 
 /**
- * Of the people who sat down once, how many never came back.
+ * Where therapy ends, how much of the total loss that is, and whether it is
+ * moving. Same criterion as the table: people AT a stage, not steps into it.
  *
- * Only buyers with thirty days behind them: somebody who bought on Tuesday has
- * not "failed to return", they have not had the chance. Excluding them is what
- * keeps the number from moving every time a good week of sales comes in.
- */
-async function sinRetorno(
-  db: import("pg").Client,
-  paises: string[],
-  desde: string,
-  hasta: string,
-  previo: { desde: string; hasta: string },
-  hoy: string,
-): Promise<NoVuelven | null> {
-  const corte = minimo(hasta, sumarDias(hoy, -DIAS_PARA_VOLVER));
-  if (corte < desde) return null;
-
-  const contar = async (d: string, h: string) => {
-    const { rows } = await db.query<{ primera: string; segunda: string }>(
-      `select coalesce(sum(case when nro_sesion = 1 then pacientes end), 0)::text
-                as primera,
-              coalesce(sum(case when nro_sesion = 2 then pacientes end), 0)::text
-                as segunda
-         from marketing.funnel_etapas
-        where pais = any($1) and fecha_compra >= $2 and fecha_compra <= $3`,
-      [paises, d, h],
-    );
-    return {
-      primera: Number(rows[0]?.primera ?? 0),
-      segunda: Number(rows[0]?.segunda ?? 0),
-    };
-  };
-
-  const [ahora, antes] = await Promise.all([
-    contar(desde, corte),
-    contar(previo.desde, previo.hasta),
-  ]);
-
-  if (ahora.primera === 0) return null;
-
-  const pct = (ahora.primera - ahora.segunda) / ahora.primera;
-  const pctPrevio =
-    antes.primera === 0 ? null : (antes.primera - antes.segunda) / antes.primera;
-
-  return {
-    personas: ahora.primera - ahora.segunda,
-    pct,
-    deltaPp: pctPrevio === null ? null : pct - pctPrevio,
-    base: ahora.primera,
-    hasta: corte,
-  };
-}
-
-/**
- * Where the funnel loses people, how much of the total loss that one step is,
- * and whether it is moving.
- *
- * The rules, so the sentence is never a guess (METRICAS.md §7 ter):
- *  · the worst step is the mature stage with the highest drop against the
- *    stage before it, the purchase-to-first-session one included;
- *  · its weight is its own losses over everything lost up to the sixth session;
- *  · it is improving or worsening when its drop moved at least a point against
- *    the previous period, and stable inside that.
+ * The rules, so the sentence is never a guess (METRICAS.md §6 bis):
+ *  · the worst stage is the mature one where the most people ENDED, counted in
+ *    people and not as a rate, so a tiny stage with a high rate cannot win;
+ *  · its weight is its own leavers over everyone who left up to the sixth
+ *    session;
+ *  · it improves or worsens when its share moved at least a point against the
+ *    previous period, and is stable inside that.
  */
 function lecturaDe(filas: FilaEtapa[]): string | null {
-  const conCaida = filas.filter(
-    (f): f is FilaEtapa & { caida: number; cayeron: number; previa: number } =>
-      f.caida !== null && f.cayeron !== null && f.previa !== null,
+  const conQuedados = filas.filter(
+    (f): f is FilaEtapa & { seQuedaron: number; pctSeQuedaron: number } =>
+      f.seQuedaron !== null && f.pctSeQuedaron !== null,
   );
-  if (conCaida.length === 0) return null;
+  if (conQuedados.length === 0) return null;
 
-  const peor = conCaida.reduce((a, b) => (b.caida > a.caida ? b : a));
-  const perdidoTotal = conCaida.reduce((a, f) => a + f.cayeron, 0);
+  const peor = conQuedados.reduce((a, b) => (b.seQuedaron > a.seQuedaron ? b : a));
+  const perdidoTotal = conQuedados.reduce((a, f) => a + f.seQuedaron, 0);
   const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
 
-  const tramo =
-    peor.nro === 1
-      ? "entre la compra y la primera sesión"
-      : `entre la ${peor.nro - 1}ª sesión y la ${peor.nro}ª`;
-
-  // The denominator of the step, not the buyer base: they are different
-  // numbers and naming the wrong one makes the sentence say something false.
-  const deQuienes =
-    peor.nro === 1
-      ? `${peor.previa} compradores`
-      : `${peor.previa} que habían llegado a la ${peor.nro - 1}ª`;
+  const donde =
+    peor.nro === 0
+      ? "La mayoría de lo que se pierde es gente que pagó y no se sentó nunca"
+      : `La terapia termina más que en ninguna otra parte en la ${peor.nro}ª sesión`;
 
   const peso =
     perdidoTotal > 0
-      ? ` Ahí se va ${pct(peor.cayeron / perdidoTotal)} de todo lo que se pierde hasta la 6ª sesión.`
+      ? ` Es ${pct(peor.seQuedaron / perdidoTotal)} de todo lo que se pierde hasta la 6ª sesión.`
       : "";
 
-  const base = `La pérdida más grande está ${tramo}: se van ${peor.cayeron} de ${deQuienes}, ${pct(peor.caida)}.${peso}`;
+  const base = `${donde}: ${peor.seQuedaron} personas, ${pct(peor.pctSeQuedaron)} de los compradores, no pasaron de ahí.${peso}`;
 
   if (peor.deltaPp === null) return base;
   if (Math.abs(peor.deltaPp) < 0.01) {
     return `${base} Igual que en el período anterior.`;
   }
   return peor.deltaPp < 0
-    ? `${base} Viene mejorando: ${(Math.abs(peor.deltaPp) * 100).toFixed(1)} puntos menos de caída que en el período anterior.`
-    : `${base} Viene empeorando: ${(peor.deltaPp * 100).toFixed(1)} puntos más de caída que en el período anterior.`;
+    ? `${base} Viene mejorando: ${(Math.abs(peor.deltaPp) * 100).toFixed(1)} puntos menos que en el período anterior.`
+    : `${base} Viene empeorando: ${(peor.deltaPp * 100).toFixed(1)} puntos más que en el período anterior.`;
 }
 
 function delta(ahora: number, antes: number): number | null {

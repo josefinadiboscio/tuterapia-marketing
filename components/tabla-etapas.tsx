@@ -4,6 +4,18 @@ import type { FilaEtapa } from "@/lib/funnel";
 /**
  * Stage by stage, with the purchase drawn as the base.
  *
+ * Un solo criterio, y es la gente que está EN cada etapa:
+ *
+ *  · "Llegaron" y "% del total" — cuánta gente queda a esta altura.
+ *  · "Se quedaron acá" — cuánta gente TERMINÓ acá: llegó a esta etapa y no
+ *    pasó a la siguiente. Es la pregunta que uno hace en voz alta ("¿cuántos
+ *    hicieron una sola sesión?").
+ *
+ * La tabla no muestra el escalón de entrada a cada etapa. Es la misma tabla
+ * leída al revés, y era el motivo de que la fila de la 1ª sesión pareciera
+ * decir que solo el 5% se cae ahí: ese 5% es de "Compraron" —pagó y no se
+ * sentó nunca— y no de la 1ª sesión, donde se termina un tercio.
+ *
  * Written literally, one class per stage, because Tailwind reads the source as
  * text: a class built from a template literal never reaches the stylesheet.
  * The ramp runs orange to deep teal so the colour says which half of the
@@ -20,23 +32,19 @@ export function TablaEtapas({ filas }: { filas: FilaEtapa[] }) {
         <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
           <th className="pb-2 font-normal">Etapa</th>
           <th className="pb-2 font-normal" />
-          <th className="pb-2 text-right font-normal">
-            <span title="Compradores del período con tiempo suficiente para llegar a esta etapa">
-              n
-            </span>
-          </th>
           <th className="pb-2 text-right font-normal">Llegaron</th>
           <th className="pb-2 text-right font-normal">
-            <span title="Sobre los compradores de esta etapa">% del total</span>
-          </th>
-          <th className="pb-2 text-right font-normal">Cayeron</th>
-          <th className="pb-2 text-right font-normal">
-            <span title="Contra la etapa anterior, sobre la misma población">
-              % caída
+            <span title="Sobre los compradores con tiempo suficiente para esta etapa">
+              % del total
             </span>
           </th>
           <th className="pb-2 text-right font-normal">
-            <span title="Cambio de esa caída contra el período anterior, en puntos">
+            <span title="Llegaron hasta acá y no siguieron: acá terminó su terapia. Sobre los compradores con tiempo suficiente para responder la pregunta.">
+              Se quedaron acá
+            </span>
+          </th>
+          <th className="pb-2 text-right font-normal">
+            <span title="Cambio de ese porcentaje contra el período anterior, en puntos">
               Δ pp
             </span>
           </th>
@@ -45,9 +53,20 @@ export function TablaEtapas({ filas }: { filas: FilaEtapa[] }) {
       <tbody>
         {filas.map((f, i) => (
           <tr key={f.nro} className="border-b border-borde">
-            <td className="py-2 text-texto">{f.etiqueta}</td>
+            <td className="py-2">
+              <div className="text-texto">{f.etiqueta}</div>
+              {/* The n of each stage: its own base, and up to when. Under the
+                  label rather than in a column of its own — it qualifies the
+                  row, it is not a measure of it. */}
+              {f.n === null ? null : (
+                <div className="text-[11px] text-ter">
+                  n {entero(f.n)}
+                  {f.corte ? ` · compras hasta ${f.corte}` : ""}
+                </div>
+              )}
+            </td>
 
-            <td className="w-[38%] py-2">
+            <td className="w-[26%] py-2">
               {/* The bar is the accumulated retention against the purchase,
                   which is the column beside it drawn. */}
               {f.llegaron === null || base === 0 ? null : (
@@ -60,24 +79,33 @@ export function TablaEtapas({ filas }: { filas: FilaEtapa[] }) {
               )}
             </td>
 
-            <td
-              className="py-2 text-right tabular-nums text-ter"
-              title={f.corte ? `Compras hasta el ${f.corte}` : undefined}
-            >
-              {f.n === null ? "" : entero(f.n)}
-            </td>
             <td className="py-2 text-right tabular-nums text-texto">
               {f.llegaron === null ? "" : entero(f.llegaron)}
             </td>
             <td className="py-2 text-right tabular-nums text-sec">
               {f.pctDelTotal === null ? "" : porcentaje(f.pctDelTotal)}
             </td>
-            <td className="py-2 text-right tabular-nums text-coral">
-              {f.cayeron === null ? "" : entero(f.cayeron)}
+
+            <td
+              className="py-2 text-right tabular-nums"
+              title={
+                f.pctDeLosQueLlegaron === null
+                  ? undefined
+                  : `${porcentaje(f.pctDeLosQueLlegaron)} de los que llegaron a esta etapa · compras hasta ${f.corteQuedaron}`
+              }
+            >
+              {f.seQuedaron === null ? (
+                ""
+              ) : (
+                <>
+                  <span className="text-coral">{entero(f.seQuedaron)}</span>
+                  <span className="ml-1.5 text-coral">
+                    {f.pctSeQuedaron === null ? "" : porcentaje(f.pctSeQuedaron)}
+                  </span>
+                </>
+              )}
             </td>
-            <td className="py-2 text-right tabular-nums text-coral">
-              {f.caida === null ? "" : porcentaje(f.caida)}
-            </td>
+
             <td className="py-2 text-right tabular-nums">
               <DeltaPp valor={f.deltaPp} />
             </td>

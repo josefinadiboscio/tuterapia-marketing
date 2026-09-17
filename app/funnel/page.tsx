@@ -92,10 +92,12 @@ export default async function Funnel({
                   )}
                 </p>
                 {/* The one card allowed a line under the number: without the
-                    base and the cut-off date the percentage is unreadable. */}
+                    base and the cut-off date the percentage is unreadable.
+                    It is the first-session row of the table, not a second
+                    count of the same thing — same base, same cut. */}
                 <p className="mt-0.5 text-[11px] text-ter">
-                  sobre {entero(vista.noVuelven.base)} compradores con 1ª sesión,
-                  hasta el {vista.noVuelven.hasta}
+                  sobre {entero(vista.noVuelven.base)} compradores, hasta compras
+                  del {vista.noVuelven.hasta}
                 </p>
               </>
             )}
@@ -104,7 +106,7 @@ export default async function Funnel({
 
         <section className="mt-9">
           <h2 className="text-xs uppercase tracking-wide text-ter">
-            Caída por etapa
+            Por etapa · dónde termina la terapia
           </h2>
           <div className="mt-3">
             <TablaEtapas filas={vista.etapas} />

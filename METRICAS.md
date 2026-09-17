@@ -450,29 +450,55 @@ cantidad de compradores maduros sobre la que se calcula.
 | Columna | Fórmula | Qué lee |
 |---|---|---|
 | % del total | `llegaron[n] / n_maduros[n]` | retención acumulada contra la compra |
-| % caída | `(llegaron[n−1] − llegaron[n]) / llegaron[n−1]` | el escalón contra la etapa anterior |
+| Se quedaron acá | `(llegaron[n] − llegaron[n+1]) / n_maduros[n+1]` | cuánta gente **terminó** su terapia en esa etapa |
 
-Las dos, siempre. La primera dice cuánta gente queda; la segunda, dónde se
-fue. Y las dos se calculan **sobre la misma población**: el `llegaron[n−1]` del
+**Un solo criterio, y es la gente que está EN cada etapa.** La fila de la 1ª
+sesión habla de los que hicieron una primera sesión: cuántos llegaron y
+cuántos terminaron ahí. **No** muestra el escalón de entrada a la etapa, que es
+la misma tabla leída al revés y era el motivo de que esa fila pareciera decir
+que solo el 5% se cae en la primera sesión. Ese 5% existe, pero es de
+"Compraron" —pagó y no se sentó nunca—, no de la 1ª sesión, donde termina un
+tercio. El escalón de entrada quedó como tooltip de la celda, no como columna.
+
+**"Se quedaron acá" es la pregunta que se hace en voz alta** —"¿cuántos
+hicieron una sola sesión?"— y no se puede leer de las otras dos columnas. Es
+gente que llegó a esa etapa y no pasó a la siguiente, así que se mide con la
+madurez de la etapa **siguiente**: quien compró hace doce días llegó a su
+primera sesión y no tuvo tiempo de una segunda, y contarlo como "se quedó en
+una" sería contar el calendario.
+
+Medido en AR / 90 días: 5,0% no arrancó nunca, **33,4% se quedó en una sola
+sesión**, 12,4% en dos, 9,6% en tres. La fila amarilla del embudo mide lo
+primero y no lo segundo — son dos cosas distintas y la confusión entre las dos
+es el motivo de que esta columna exista.
+
+Las dos, siempre: la primera dice cuánta gente queda, la segunda dónde
+termina. Y las dos se calculan **sobre la misma población**: el `llegaron[n−1]` del
 escalón se recalcula dentro del corte de madurez de la etapa *n*, no se toma de
 la fila de arriba. Una caída medida entre dos denominadores distintos no es una
 caída.
 
 El delta es contra el **período anterior del mismo largo**, en puntos
-porcentuales, sobre la columna de caída. Verde si cae menos, ámbar si cae más.
+porcentuales, sobre "Se quedaron acá". Verde si termina menos gente ahí, ámbar
+si termina más.
 
 ### No vuelven tras la 1ª
 
 ```
-no_vuelven = llegaron[1] − llegaron[2]   (compras hasta hoy − 30 días)
-pct        = no_vuelven / llegaron[1]
+no_vuelven = llegaron[1] − llegaron[2]   (compras hasta hoy − madurez(2))
+pct        = no_vuelven / compradores    (la misma base que la tabla)
 ```
 
-**Se excluyen los últimos 30 días**: quien compró el martes no "no volvió",
-todavía no tuvo la chance. Treinta días alcanzan para la primera sesión (10) y
-la segunda (19) con margen. La card muestra la cantidad de personas, el
-porcentaje, el delta en puntos contra el período anterior, y debajo sobre
-cuántos compradores con 1ª sesión se calcula y hasta qué fecha de compra.
+**La card ES la fila de la 1ª sesión de la tabla**, no otra cuenta de lo mismo.
+Tuvo su propio corte de 30 días y por lo tanto su propio número —333 contra 398
+en la tabla, el mismo día y el mismo país— que es exactamente lo que este
+proyecto no permite. Ahora hereda `madurez(2)`, 19 días, que es el corte de la
+fila: suficiente para que el comprador mediano haya tenido su primera sesión
+(2 días de mediana) y la segunda (7 más).
+
+La card muestra la cantidad de personas, el porcentaje sobre compradores, el
+delta en puntos contra el período anterior, y debajo sobre cuántos compradores
+se calcula y hasta qué fecha de compra.
 
 No se llama "caída de 1ª sesión": ese nombre se confunde con los que compran y
 nunca se sientan, que es el escalón *compra → 1ª* de la tabla.
@@ -496,11 +522,12 @@ antes del pago, y una espera no puede ser menos que nada.
 
 Tres reglas, y ninguna es una opinión:
 
-1. **El tramo más caro** es la etapa madura con mayor `% caída`, incluido el
-   escalón compra → 1ª.
-2. **Cuánto pesa** es `cayeron[peor] / Σ cayeron[todas las etapas maduras]`,
-   dicho como "ahí se va X% de todo lo que se pierde hasta la 6ª sesión".
-3. **Si viene mejorando** sale del delta de ese mismo escalón contra el período
+1. **La etapa más cara** es la etapa madura donde terminó **más gente**,
+   contada en personas y no en porcentaje, así una etapa chica con una tasa
+   alta no puede ganar. Incluye "Compraron", que es pagar y no sentarse nunca.
+2. **Cuánto pesa** es `se_quedaron[peor] / Σ se_quedaron[todas las maduras]`,
+   dicho como "es X% de todo lo que se pierde hasta la 6ª sesión".
+3. **Si viene mejorando** sale del delta de esa misma etapa contra el período
    anterior: mejora o empeora con un punto porcentual o más de movimiento,
    estable dentro de eso.
 

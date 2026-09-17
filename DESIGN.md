@@ -257,45 +257,62 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
 
 ## Ads
 
-Dos niveles, una sola tabla, y los dos salen de `marketing.metricas_utm`: el
-nivel plataforma es la suma de sus sources, así que no pueden discrepar.
+**El gasto vive en el día**, por país y plataforma, y se edita desde acá:
+"Editar gasto" abre la carga, se elige plataforma y país, y se cargan los
+montos diarios. Todo lo demás se suma al leer, así que corregir un día cambia
+todos los números que dependen de él sin recalcular nada.
 
-**El gasto se mide por plataforma, y eso es una decisión, no una carencia.** Se
-planifica y se carga así. Por lo tanto el CAC y el ratio existen a nivel
-plataforma y simplemente no existen por campaña.
+Arriba, **rango de fechas libre** y el selector de país. Cuatro métricas hero,
+todas respetando los filtros:
 
-**Nivel plataforma** (Meta, Google Ads, TikTok): gasto semanal, registros,
-pacientes nuevos, conversión, CAC, ratio LTV/CAC y veredicto.
-
-| Veredicto | Condición | Color |
+| Hero | Qué muestra | Debajo |
 |---|---|---|
-| Escalar | ratio > 1,8 | `--green` |
-| Mantener | ratio entre 1,3 y 1,8 | neutro |
-| Bajar | ratio < 1,3 | `--coral` |
-| Apagar | ratio bajo 1,0 tres semanas seguidas | `--coral`, más intenso |
-| Sin dato | menos de 30 registros en la semana | neutro |
+| Gasto diario | Promedio del período | Total del período |
+| Pacientes diarios | Promedio del período | Total del período |
+| CAC | Gasto ÷ pacientes nuevos | Delta contra el período anterior, del mismo largo |
+| Retorno diario | Margen generado − gasto | Total del período |
 
-**Nivel UTM**, desplegable bajo cada plataforma: registros, pacientes nuevos y
-conversión por `utm_source`. **Sin CAC, sin ratio y sin veredicto: esas celdas
-no están, no dicen "sin dato".** Un guión dice "no lo pudimos medir"; la verdad
-es que la pregunta no aplica a ese nivel.
+**Retorno es margen, nunca facturación**: sesiones realizadas × margen por
+sesión, con 26% en AR y 30% en UY. Y **pacientes cuenta a todos los del
+período**, no solo a los que trajeron las plataformas, para que el denominador
+del CAC sea el mismo que en General.
 
-- **La alerta por UTM es de conversión, no de costo.** Una campaña se marca en
-  coral cuando convierte por debajo de dos tercios del promedio de su
-  plataforma y país, y solo con 30 registros o más. Debajo de esa muestra no se
-  marca nada: ni alerta ni veredicto.
-- **La fila entera se tiñe suave** en Bajar y Apagar. Es la única parte de la
-  app donde el color pinta una fila completa, y se justifica porque la fila es
-  una decisión.
-- Arriba, cuatro cards: gasto semanal, pacientes nuevos, CAC medio, plataformas
-  a revisar.
-- **La semana abre en la última cerrada**, no en la que está corriendo: esa
-  tiene el gasto cargado y solo parte de los registros, así que todo ratio
-  adentro lee bajo por construcción.
-- Abajo, recomendaciones de dos tipos, **siempre con el número que las
-  sostiene**. De presupuesto, por plataforma, según el ratio. De campaña,
-  nombrando las que traen volumen que no convierte, con su conversión contra el
-  promedio de su plataforma.
+**Tabla de dos niveles**: Meta, Instagram, Google Ads y TikTok, cada una
+desplegable con sus `utm_source` crudos debajo. Cada campaña lleva una
+**descripción escrita a mano** — `metaarj7` no dice nada solo.
+
+Columnas: campaña, ventas de las últimas 6 semanas como mini-gráfico,
+registros, ventas, conversión, CAC, ROAS y estado, con **la lectura de la fila
+debajo**.
+
+- **El CAC de la fila de plataforma es exacto** en Google Ads y TikTok: su
+  gasto sobre sus ventas. **El de campaña es repartido** — el presupuesto de la
+  plataforma dividido según su parte de los registros, porque nadie registra
+  gasto por campaña — y lleva un `~` discreto que lo dice.
+- **Instagram no tiene presupuesto propio.** El de Meta compra las pauta y el
+  alcance orgánico que viene atrás, así que son **una sola unidad de
+  inversión**: los registros de Instagram entran al reparto y su fila dice que
+  el gasto es de Meta.
+
+| Estado | Condición |
+|---|---|
+| Escalar | ROAS > 1,8 |
+| Mantener | 1,3 – 1,8 |
+| Bajar | < 1,3 |
+| Apagar | Bajo 1,0 tres semanas seguidas |
+| Sin dato | Menos de 30 registros — dice cuántos faltan, nunca un veredicto |
+
+**El ROAS semanal se construye igual que el del período** — mismo pool, mismo
+reparto — así que "tres semanas bajo 1" significa semana a semana lo mismo que
+en el rango. Una semana sin gasto **no es un retorno de cero**: es que no hay
+ratio, y no cuenta para apagar.
+
+**La lectura de cada fila cita su propio número**: cuánto por encima o por
+debajo del umbral, cuánto convierte contra el promedio de su plataforma,
+cuántos registros faltan. Nunca una frase genérica.
+
+**Solo plataformas con gasto o registros en el período.** Las apagadas van
+detrás de un desplegable aparte.
 
 ## Funnel
 

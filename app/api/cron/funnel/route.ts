@@ -71,7 +71,9 @@ export async function GET(request: Request) {
   }
 }
 
+/** Number(null) is 0, and 0 is a valid day count, so absent is checked first. */
 function entero(valor: string | null, porDefecto: number): number {
+  if (valor === null || valor.trim() === "") return porDefecto;
   const n = Number(valor);
   return Number.isInteger(n) && n >= 0 ? n : porDefecto;
 }

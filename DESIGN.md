@@ -364,3 +364,29 @@ Antes de dar una pantalla por terminada:
 5. ¿Se puede sacar algún elemento sin perder información?
 
 Si la respuesta a la 5 es sí, sacarlo.
+
+## Mascotas del header
+
+Cuatro personajes apoyados sobre la línea divisoria de la barra de pestañas,
+empujados a la derecha. Son decoración y nada más: `aria-hidden`, sin texto
+alternativo, sin animaciones, y se esconden por debajo de 1100px para que
+nunca empujen la navegación.
+
+Uno por franja del día, siempre en el mismo orden: noche (00–06), mañana
+(06–12), tarde (12–19), creando (19–24). El de la franja actual va a opacidad
+plena y los otros tres al 35%. Son cuatro personas distintas —tres nenas y un
+nene— y no se reordenan.
+
+Cada franja tiene tres poses. Cuál se ve sale del día del mes módulo 3: estable
+al recargar, distinta mañana, y la misma para las cuatro así cambian juntas.
+Día local (UTC−3).
+
+Los doce PNG viven en `public/mascots/`, recortados a su tinta y escalados con
+un factor común: la pose de pie más alta mide 46px y la que duerme mide los
+28px que realmente mide. Darles la misma altura a todas la agrandaría al doble
+del resto. Cada `<img>` lleva su ancho y alto escritos para que el navegador
+tenga la caja antes de que llegue la imagen.
+
+El trazo es azul marino, hecho para el fondo crema. En oscuro se pierde, así
+que la clase `.mascota` lo invierte y gira el tono 180° —queda crema y el
+naranja sigue siendo naranja— y en claro no se toca.

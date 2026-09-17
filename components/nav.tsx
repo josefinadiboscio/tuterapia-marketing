@@ -5,6 +5,7 @@ import { ToggleTema } from "@/components/tema";
 import { RecordarPais } from "@/components/recordar-pais";
 import { RANGOS, leerUltimaSync, type Rango } from "@/lib/dashboard";
 import { identidadDe } from "@/components/identidad";
+import { Mascotas } from "@/components/mascotas";
 
 /**
  * Header shared by every tab: five real routes, not client-side tabs, so each
@@ -82,7 +83,9 @@ export async function Nav({
         </div>
       </div>
 
-      <nav className="mx-auto flex max-w-6xl gap-5 px-6 pt-3 text-sm">
+      {/* items-end so the mascots at the end of the row stand on the divider
+          rather than floating above it. */}
+      <nav className="mx-auto flex max-w-6xl items-end gap-5 px-6 pt-3 text-sm">
         {PESTANAS.map((p) => (
           <Link
             key={p.href}
@@ -96,6 +99,8 @@ export async function Nav({
             {p.nombre}
           </Link>
         ))}
+
+        <Mascotas />
       </nav>
     </header>
   );

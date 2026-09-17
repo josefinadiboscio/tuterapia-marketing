@@ -130,3 +130,19 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-variant-numeric: tabular-nums;
 }
+
+/**
+ * Las mascotas están dibujadas con trazo azul marino, que sobre el fondo verde
+ * casi negro del modo oscuro desaparece. Invertir y girar el tono 180° sube el
+ * trazo a un crema claro y le devuelve al naranja su lugar, en vez de dejarlo
+ * celeste como haría una inversión sola.
+ *
+ * En claro no se toca: el original está hecho para fondo crema.
+ */
+.mascota {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+:root[data-theme="light"] .mascota {
+  filter: none;
+}

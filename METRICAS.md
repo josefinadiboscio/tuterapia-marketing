@@ -94,12 +94,15 @@ create table marketing.parametros (
 | Parámetro | AR | UY | Cadencia |
 |---|---|---|---|
 | `pct_comision` | 0,26 | 0,30 | Casi nunca cambia |
-
-`pct_comision` es lo que la sesión **paga**, no lo que deja: el margen es el
-complemento, `1 − pct_comision`. Multiplicar por la comisión en vez de por su
-complemento dejaba el LTV en un tercio de lo que es (AR US$ 20 en vez de
-US$ 61, UY US$ 49 en vez de US$ 114).
 | `tipo_cambio` | ARS/USD | UYU/USD | Mensual, carga manual |
+
+`pct_comision` es **lo que Tu Terapia se queda**, no lo que paga. Una sesión
+argentina son ~36.000 ARS; a 1550 son US$ 23,23, y el 26% de eso son los
+**US$ 6** que deja. El 74% restante es del terapeuta.
+
+Estuvo invertida unas horas, con la teoría de que un LTV de US$ 20 era muy
+bajo. No era el margen: US$ 20 es lo que vale una cohorte en sus primeros 90
+días, y el número contra el que se lo comparaba era el de por vida.
 
 El porcentaje es **revenue final**: ya está neto de pasarela y de todo lo
 demás. No se le resta nada más.
@@ -158,7 +161,7 @@ ningún precio haya cambiado.
 
 ```
 precio_sesion_local = pacientes_pagos.monto / pacientes_pagos.sesiones
-margen_usd_sesion   = precio_sesion_local × (1 − pct_comision[pais]) / tipo_cambio[pais, mes]
+margen_usd_sesion   = precio_sesion_local × pct_comision[pais] / tipo_cambio[pais, mes]
 ```
 
 Para pagos en `U$S` se omite la división por tipo de cambio.
@@ -188,6 +191,7 @@ terminaron su ciclo; incluirlos subestima el LTV.
 | Denominador | Compradores de esa cohorte | Todos los que hicieron ≥1 sesión |
 | AR · UY | 3,77 · 4,46 | **8,68 · 13,63** |
 | Para qué | Es el multiplicador del LTV | Es la respuesta a "cuántas sesiones hace un paciente" |
+| LTV que implica | AR US$ 21,6 · UY US$ 49,0 | AR US$ 49,8 · UY US$ 149,7 |
 
 El primero **tiene** que estar acotado: sin ventana, una cohorte vieja siempre
 parece mejor solo por haber tenido más tiempo, y dejaría de ser comparable
@@ -195,16 +199,18 @@ entre meses. El segundo **tiene** que derivar: es la antigüedad de la base y se
 mueve de a décimas por mes.
 
 En la card del LTV va el segundo, **sin `×` adelante**, porque no multiplica al
-número de arriba. 8,68 × US$ 15,61 da US$ 136, que es lo que vale un paciente
-argentino a lo largo de su vida — no los US$ 58,9 que muestra el LTV, que son
-su valor en los primeros 90 días.
+número de arriba: el LTV se calcula con el primero.
 
 Si sumamos solo a los que además tienen un pago confirmado, el histórico da
 9,06 en AR y 14,33 en UY. Se eligió el denominador ancho: una sesión de promo
 o cortesía sigue siendo una sesión que el paciente hizo.
 
-**Pendiente**: con las dos cifras en la misma card, queda por decidir si el LTV
-del tablero sigue siendo el de 90 días o pasa a ser el de por vida.
+**Pendiente, y ahora con números.** Con el margen correcto (×0,26), el LTV a 90
+días da **AR US$ 21,6** y el de por vida **AR US$ 49,8**. La referencia que
+maneja el negocio —60 en AR, 120 en UY— es la de por vida. Queda por decidir
+cuál muestra el tablero: el de 90 días es el comparable contra el CAC del mes,
+el de por vida es el que responde "cuánto vale un paciente". Cambiarlo mueve la
+escala del ratio LTV/CAC de Ads y hay que recalibrar los umbrales 1,3 / 1,8.
 
 ### CAC
 

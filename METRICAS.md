@@ -429,6 +429,17 @@ tiempo de llegar a ella**. Días necesarios desde la compra:
 madura cuando la mayoría de la cohorte tuvo el tiempo, no cuando lo tuvo la
 mitad.
 
+**Medido de nuevo sobre estas tablas, ya con compradores y no registros** (AR,
+últimos 90 días): compra → 1ª sesión tiene mediana 2 días y p80 5; los tramos
+entre sesiones tienen mediana 7 y p80 entre 10 y 13. La cadencia es semanal,
+que es lo que uno esperaría de terapia.
+
+Con esos números la fórmula medida sería `5 + (n − 1) × 11`, así que las
+constantes de arriba son **estrictas al principio y algo flojas al final**: la
+6ª sesión pediría 60 días en lugar de 55. Quedan como están por ahora.
+Recalibrar mueve todos los números de la pantalla y es una decisión, no un
+arreglo.
+
 Si en el período elegido ningún comprador tiene esa edad, **la fila va vacía**.
 Nunca un número sobre pocos casos, y nunca un cero: cero llegadas y ninguna
 oportunidad de llegar no son lo mismo. Cada fila muestra su `n`, que es la
@@ -492,6 +503,29 @@ Tres reglas, y ninguna es una opinión:
 3. **Si viene mejorando** sale del delta de ese mismo escalón contra el período
    anterior: mejora o empeora con un punto porcentual o más de movimiento,
    estable dentro de eso.
+
+### Verificado contra `sesiones` el 2026-09-18
+
+`/api/cron/funnel-check?pais=AR&periodo=90` cuenta las mismas etapas directo de
+MySQL, escrito a propósito con otra forma (sumas condicionales en una pasada,
+en lugar de una distribución expandida en JavaScript), y compara contra lo que
+lee la pantalla. Dio `todo_coincide: true`:
+
+| Etapa | Corte | n | Llegaron | % del total | % caída |
+|---|---|---|---|---|---|
+| Compraron | 2026-09-17 | 1.570 | 1.570 | 100,0% | — |
+| 1ª sesión | 2026-09-07 | 1.376 | 1.307 | 95,0% | 5,0% |
+| 2ª sesión | 2026-08-29 | 1.193 | 743 | 62,3% | 34,9% |
+| 3ª sesión | 2026-08-20 | 1.037 | 524 | 50,5% | 19,8% |
+| 4ª sesión | 2026-08-11 | 855 | 348 | 40,7% | 19,1% |
+| 5ª sesión | 2026-08-02 | 633 | 207 | 32,7% | 23,0% |
+| 6ª sesión | 2026-07-24 | 487 | 126 | 25,9% | 20,3% |
+
+El escalón más caro es 1ª → 2ª con 34,9%. El no-show entre pagar y sentarse es
+5,0%, mucho más chico de lo que se temía.
+
+No vuelven tras la 1ª, mismo corte: **333 personas, 34,8%**, sobre 956
+compradores con 1ª sesión, hasta compras del 2026-08-18.
 
 ---
 

@@ -31,10 +31,16 @@ export const ULTIMA_ETAPA = 6;
  * How long a stage needs before its number means anything, in days from the
  * purchase.
  *
- * Both numbers are measured, not assumed (METRICAS.md §5 and §8): getting to a
- * first session runs a median of 3 to 4 days with a p80 near 10, and the gap
- * between two sessions averages 9. The p80 is used rather than the median so a
- * stage is called mature when most of the cohort has had the time, not half.
+ * Both numbers are measured, not assumed (METRICAS.md §5, §6 bis and §8), and
+ * the p80 is used rather than the median so a stage is called mature when most
+ * of the cohort has had the time, not half.
+ *
+ * Measured again on these very tables, over buyers rather than registrations:
+ * purchase to first session has a p80 of 5 days in Argentina and the gap
+ * between two sessions a p80 of 10 to 13. So these constants are strict early
+ * and slightly loose late — the sixth session would want 60 days rather than
+ * 55. Left as they are for now: recalibrating moves every number on the
+ * screen, and it is a decision, not a fix.
  */
 const DIAS_A_PRIMERA = 10;
 const DIAS_ENTRE_SESIONES = 9;
@@ -58,6 +64,8 @@ export type FilaEtapa = {
   /** Buyers of the window old enough for this stage. null: none are. */
   n: number | null;
   llegaron: number | null;
+  /** How many of this row's base had reached the stage before it. */
+  previa: number | null;
   /** Share of this row's own base that got here. */
   pctDelTotal: number | null;
   cayeron: number | null;
@@ -250,6 +258,7 @@ function armarEtapas(
         etiqueta,
         n: vacia ? null : c!.base,
         llegaron: vacia ? null : c!.base,
+        previa: null,
         pctDelTotal: vacia ? null : 1,
         cayeron: null,
         caida: null,
@@ -266,6 +275,7 @@ function armarEtapas(
       etiqueta,
       n: vacia ? null : c!.base,
       llegaron: vacia ? null : c!.actual,
+      previa: vacia ? null : c!.previa,
       pctDelTotal: vacia ? null : c!.actual / c!.base,
       cayeron: vacia || caida === null ? null : c!.previa - c!.actual,
       caida,
@@ -422,8 +432,8 @@ async function sinRetorno(
  */
 function lecturaDe(filas: FilaEtapa[]): string | null {
   const conCaida = filas.filter(
-    (f): f is FilaEtapa & { caida: number; cayeron: number } =>
-      f.caida !== null && f.cayeron !== null,
+    (f): f is FilaEtapa & { caida: number; cayeron: number; previa: number } =>
+      f.caida !== null && f.cayeron !== null && f.previa !== null,
   );
   if (conCaida.length === 0) return null;
 
@@ -436,12 +446,19 @@ function lecturaDe(filas: FilaEtapa[]): string | null {
       ? "entre la compra y la primera sesión"
       : `entre la ${peor.nro - 1}ª sesión y la ${peor.nro}ª`;
 
+  // The denominator of the step, not the buyer base: they are different
+  // numbers and naming the wrong one makes the sentence say something false.
+  const deQuienes =
+    peor.nro === 1
+      ? `${peor.previa} compradores`
+      : `${peor.previa} que habían llegado a la ${peor.nro - 1}ª`;
+
   const peso =
     perdidoTotal > 0
       ? ` Ahí se va ${pct(peor.cayeron / perdidoTotal)} de todo lo que se pierde hasta la 6ª sesión.`
       : "";
 
-  const base = `La pérdida más grande está ${tramo}: cae ${pct(peor.caida)} de los ${peor.n} compradores que llegaron a esa altura.${peso}`;
+  const base = `La pérdida más grande está ${tramo}: se van ${peor.cayeron} de ${deQuienes}, ${pct(peor.caida)}.${peso}`;
 
   if (peor.deltaPp === null) return base;
   if (Math.abs(peor.deltaPp) < 0.01) {

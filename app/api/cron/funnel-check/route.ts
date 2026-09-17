@@ -3,7 +3,11 @@ import type { RowDataPacket } from "mysql2";
 import { withMysql } from "@/lib/mysql";
 import { withDb } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/auth";
-import { LOCAL_UTC_OFFSET_HOURS, PRIMER_PAGO } from "@/lib/queries/shared";
+import {
+  LOCAL_UTC_OFFSET_HOURS,
+  PRIMER_PAGO,
+  PRIMERA_SESION,
+} from "@/lib/queries/shared";
 import { madurez, ULTIMA_ETAPA } from "@/lib/funnel";
 
 export const runtime = "nodejs";
@@ -46,6 +50,7 @@ export async function GET(request: Request) {
 
   const mysql = await contarEnMysql(pais, desde, etapas);
   const supabase = await contarEnSupabase(pais, desde, etapas);
+  const noShow = await diagnosticarNoShow(pais, desde, etapas[1]!.corte);
 
   const filas = etapas.map(({ nro, corte }) => {
     const m = mysql.get(nro)!;
@@ -63,6 +68,7 @@ export async function GET(request: Request) {
     ok: true,
     pais,
     periodo,
+    no_show: noShow,
     desde,
     hasta: hoy,
     todo_coincide: filas.every((f) => f.coincide),
@@ -168,4 +174,66 @@ function sumarDias(fecha: string, dias: number): string {
 
 function minimo(a: string, b: string): string {
   return a < b ? a : b;
+}
+
+
+/**
+ * Why the purchase-to-first-session drop is as small as it is.
+ *
+ * The stage counts a patient's first realized session over their whole life,
+ * which includes a session that happened BEFORE they paid. If that is common —
+ * a first session for free and the purchase afterwards — then "95% of buyers
+ * sat down" is partly people who had already sat down, and the no-show of the
+ * funnel is understated by construction.
+ *
+ * This splits the buyers into the cases so the answer is a number and not a
+ * theory.
+ */
+async function diagnosticarNoShow(pais: string, desde: string, corte: string) {
+  const dia = (col: string) =>
+    `DATE(DATE_SUB(${col}, INTERVAL ${LOCAL_UTC_OFFSET_HOURS} HOUR))`;
+  const diaPago = dia("p.primera");
+  const diaSesion = dia("ps.primera");
+
+  return withMysql(async (conn) => {
+    const [rows] = await conn.query<(RowDataPacket & Record<string, number>)[]>(
+      `SELECT COUNT(*) AS compradores,
+              SUM(ps.primera IS NULL) AS sin_ninguna_sesion,
+              SUM(${diaSesion} < ${diaPago}) AS sesion_antes_de_pagar,
+              SUM(${diaSesion} = ${diaPago}) AS sesion_el_mismo_dia,
+              SUM(${diaSesion} > ${diaPago}) AS sesion_despues_de_pagar,
+              SUM(${diaSesion} < ${diaPago}
+                  AND DATEDIFF(${diaPago}, ${diaSesion}) > 30) AS sesion_mas_de_30_dias_antes
+         FROM login l
+         JOIN (${PRIMER_PAGO}) p ON p.id_paciente = l.id
+         LEFT JOIN (${PRIMERA_SESION}) ps ON ps.id_paciente = l.id
+        WHERE l.tipo = 1 AND l.paisDominio = ?
+          AND ${diaPago} >= ? AND ${diaPago} <= ?`,
+      [pais, desde, corte],
+    );
+
+    const f = rows[0] ?? {};
+    const n = (clave: string) => Number(f[clave] ?? 0);
+    const compradores = n("compradores");
+
+    return {
+      corte,
+      compradores,
+      sin_ninguna_sesion: n("sin_ninguna_sesion"),
+      sesion_antes_de_pagar: n("sesion_antes_de_pagar"),
+      sesion_el_mismo_dia: n("sesion_el_mismo_dia"),
+      sesion_despues_de_pagar: n("sesion_despues_de_pagar"),
+      sesion_mas_de_30_dias_antes: n("sesion_mas_de_30_dias_antes"),
+      // What the drop would be if only a session AFTER the purchase counted.
+      caida_si_solo_cuenta_despues:
+        compradores === 0
+          ? null
+          : Number(
+              (
+                ((compradores - n("sesion_despues_de_pagar")) / compradores) *
+                100
+              ).toFixed(1),
+            ),
+    };
+  });
 }

@@ -372,14 +372,15 @@ empujados a la derecha. Son decoración y nada más: `aria-hidden`, sin texto
 alternativo, sin animaciones, y se esconden por debajo de 1100px para que
 nunca empujen la navegación.
 
-Uno por franja del día, siempre en el mismo orden: noche (00–06), mañana
-(06–12), tarde (12–19), creando (19–24). El de la franja actual va a opacidad
-plena y los otros tres al 35%. Son cuatro personas distintas —tres nenas y un
-nene— y no se reordenan.
+Uno por franja del día, siempre en el mismo orden: noche, mañana, tarde,
+creando. **Las cuatro al 35%, al mismo peso.** Prender la de la franja actual
+la hacía leer como un estado —algo que hay que mirar— cuando es un dibujo
+apoyado en una línea. Son cuatro personas distintas —tres nenas y un nene— y
+no se reordenan.
 
 Cada franja tiene tres poses. Cuál se ve sale del día del mes módulo 3: estable
 al recargar, distinta mañana, y la misma para las cuatro así cambian juntas.
-Día local (UTC−3).
+Día local (UTC−3). La hora ya no interviene en nada.
 
 Los doce PNG viven en `public/mascots/`, recortados a su tinta y escalados con
 un factor común: la pose de pie más alta mide 46px y la que duerme mide los

@@ -7,20 +7,17 @@ import { LOCAL_UTC_OFFSET_HOURS } from "@/lib/queries/shared";
  * screens. It can never push the navigation around, so every image carries its
  * own width and height and the row is bottom-aligned — feet on the divider.
  *
- * Four people, one per stretch of the day, always in the same order. The one
- * whose stretch it is stands at full opacity and the other three sit back.
+ * Four people, one per stretch of the day, always in the same order, all four
+ * at the same weight. Lighting up the current one made it read as a state —
+ * something you were meant to look at — when it is a drawing on a line.
  *
  * Which pose shows is the day of the month modulo three: stable across
  * reloads, different tomorrow, and the same day for all four so they change
  * together. Local day (UTC−3), like every other date on this dashboard.
  */
 
-const FRANJAS = [
-  { nombre: "noche", desde: 0, hasta: 6 },
-  { nombre: "manana", desde: 6, hasta: 12 },
-  { nombre: "tarde", desde: 12, hasta: 19 },
-  { nombre: "creando", desde: 19, hasta: 24 },
-] as const;
+/** Fixed order, left to right. They are four people and they never swap. */
+const FRANJAS = ["noche", "manana", "tarde", "creando"] as const;
 
 /**
  * The size each file is drawn at.
@@ -49,33 +46,28 @@ const TAMANO: Record<string, { ancho: number; alto: number }> = {
 };
 
 export function Mascotas({ ahora = new Date() }: { ahora?: Date }) {
+  // Only the day matters now: it picks the pose. The hour picked which one lit
+  // up, and nothing lights up any more.
   const local = new Date(ahora.getTime() - LOCAL_UTC_OFFSET_HOURS * 3_600_000);
-  const hora = local.getUTCHours();
-  const dia = local.getUTCDate();
-
-  const activa =
-    FRANJAS.find((f) => hora >= f.desde && hora < f.hasta)?.nombre ?? "noche";
-  const variante = (dia % 3) + 1;
+  const variante = (local.getUTCDate() % 3) + 1;
 
   return (
     <div
       aria-hidden="true"
       className="ml-auto hidden items-end gap-[72px] min-[1100px]:flex"
     >
-      {FRANJAS.map((f) => {
-        const archivo = `${f.nombre}-${variante}`;
+      {FRANJAS.map((nombre) => {
+        const archivo = `${nombre}-${variante}`;
         const t = TAMANO[archivo]!;
         return (
           <img
-            key={f.nombre}
+            key={nombre}
             src={`/mascots/${archivo}.png`}
             width={t.ancho}
             height={t.alto}
             alt=""
             draggable={false}
-            className={`mascota block select-none ${
-              f.nombre === activa ? "opacity-100" : "opacity-35"
-            }`}
+            className="mascota block select-none opacity-35"
           />
         );
       })}

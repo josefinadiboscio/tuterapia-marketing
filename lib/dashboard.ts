@@ -31,7 +31,12 @@ export type VistaGeneral = {
   meses: string[];
 };
 
-export const RANGOS = [3, 6, 12] as const;
+/**
+ * Seis meses y doce. Tres se sacó: la mitad de las cards leen tendencia sobre
+ * seis meses, así que un rango de tres dibujaba una serie más corta que la
+ * pendiente que la propia card estaba declarando.
+ */
+export const RANGOS = [6, 12] as const;
 export type Rango = (typeof RANGOS)[number];
 
 export const PAISES_REALES = ["AR", "UY"] as const;

@@ -200,7 +200,10 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
   dorado suave — no al pie de la pantalla.
 - **Las cards son el selector.** Al clickear una, el gráfico de abajo muestra
   esa serie. Un gráfico por bloque, nunca dos.
-- **Selector de rango 3m / 6m / 12m** arriba, junto al de país.
+- **Selector de rango 6m / 12m** arriba, junto al de país. Tres meses se sacó:
+  media docena de cards declaran su tendencia sobre seis meses cerrados, así
+  que un rango de tres dibujaba una serie más corta que la pendiente que la
+  card de arriba estaba afirmando.
 - **Anotaciones según la serie.** Con CAC seleccionado el gráfico dibuja el LTV
   como techo: mientras la línea esté abajo, cada paciente devuelve más de lo
   que costó. Con las demás series no hay banda.

@@ -456,15 +456,38 @@ function DeltaMesPrevio({
   if (valor === null || previo === null) return null;
 
   const delta = valor - previo;
-  if (Math.abs(delta) < 0.05) {
-    return <p className="mt-1 text-xs text-sec">→ estable vs. el mes anterior</p>;
-  }
+
+  // Two different questions, and a month can answer them opposite ways: the
+  // month can fall while the half-year still climbs. The slope says where it
+  // is going, the delta says what just happened.
+  const t = tendencia(
+    cerrados.slice(-MESES_TENDENCIA).map(metrica.campo),
+    metrica.unidad,
+  );
+  const rumbo =
+    t.direccion === "sin_datos"
+      ? null
+      : t.direccion === "creciendo"
+        ? { texto: `subiendo en ${t.meses}m`, tono: "text-forest" }
+        : t.direccion === "bajando"
+          ? { texto: `bajando en ${t.meses}m`, tono: "text-coral" }
+          : { texto: `estable en ${t.meses}m`, tono: "text-sec" };
+
+  const estancado = Math.abs(delta) < 0.05;
+  const uno = Math.abs(delta).toFixed(1).replace(".", ",");
 
   return (
-    <p className={`mt-1 text-xs ${delta > 0 ? "text-forest" : "text-coral"}`}>
-      {delta > 0 ? "↑ +" : "↓ −"}
-      {Math.abs(delta).toFixed(1).replace(".", ",")} vs. el mes anterior
-    </p>
+    <>
+      <p
+        className={`mt-1 text-xs ${
+          estancado ? "text-sec" : delta > 0 ? "text-forest" : "text-coral"
+        }`}
+      >
+        {estancado ? "→ igual que" : `${delta > 0 ? "↑ +" : "↓ −"}${uno} vs.`} el
+        mes anterior
+      </p>
+      {rumbo ? <p className={`text-xs ${rumbo.tono}`}>{rumbo.texto}</p> : null}
+    </>
   );
 }
 

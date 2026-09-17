@@ -1,11 +1,14 @@
-import Link from "next/link";
-import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
+import { Nav, Selectores, contexto } from "@/components/nav";
 import { TablaAds } from "@/components/tabla-ads";
-import { leerAds, MUESTRA_MINIMA, type FilaPlataforma } from "@/lib/ads";
-import { veredicto, type Veredicto } from "@/lib/veredicto";
-import { entero, usd, porcentaje, fecha, SIN_DATO } from "@/lib/ui/format";
+import { EditorGasto } from "@/components/editor-gasto";
+import { leerAds, rangoPorDefecto } from "@/lib/ads";
+import { leerGastoCargado } from "./acciones";
+import { entero, usd, decimal, SIN_DATO } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
+
+const PLATAFORMAS_CON_GASTO = ["Meta", "Google Ads", "TikTok"];
+const PAISES_REALES = ["AR", "UY"];
 
 export default async function Ads({
   searchParams,
@@ -14,168 +17,159 @@ export default async function Ads({
 }) {
   const params = await searchParams;
   const ctx = await contexto(params);
-  const vista = await leerAds(ctx.pais, params.semana);
 
-  const filas = vista.filas.map((f) => ({
-    ...f,
-    veredicto: veredicto({
-      ratio: f.ratio,
-      registros: f.registros,
-      historia: f.historia,
-    }),
-  }));
+  const porDefecto = await rangoPorDefecto();
+  const desde = fecha(params.desde) ?? porDefecto.desde;
+  const hasta = fecha(params.hasta) ?? porDefecto.hasta;
 
-  const aRevisar = filas.filter(
-    (f) => f.veredicto === "bajar" || f.veredicto === "apagar",
-  ).length;
+  const [vista, cargado] = await Promise.all([
+    leerAds(ctx.pais, desde, hasta),
+    gastoCargado(desde, hasta),
+  ]);
+
+  const deltaCac =
+    vista.cac !== null && vista.cacPrevio !== null && vista.cacPrevio > 0
+      ? vista.cac / vista.cacPrevio - 1
+      : null;
 
   return (
     <>
       <Nav activa="/ads" ctx={ctx} />
-      <Selectores activa="/ads" ctx={ctx} />
+      <Selectores activa="/ads" ctx={ctx} extra={{ desde, hasta }} />
 
       <main className="mx-auto max-w-6xl px-6 pb-8 pt-6">
-        {vista.semana === null ? (
-          <p className="text-sm text-sec">
-            No hay gasto cargado. Importá la planilla con
-            scripts/importar-gastos.ts y esta pantalla se llena sola.
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-ter">Semana</span>
-              {vista.semanas.slice(0, 8).map((s) => (
-                <Link
-                  key={s}
-                  href={conContexto("/ads", ctx, { semana: s })}
-                  className={`rounded-md border px-2 py-1 ${
-                    s === vista.semana
-                      ? "border-orange bg-orange text-bg"
-                      : "border-borde text-sec hover:text-texto"
-                  }`}
-                >
-                  {fecha(s)}
-                </Link>
-              ))}
-            </div>
+        {/* The range is a form rather than links: any two dates, not a menu. */}
+        <form
+          method="get"
+          className="flex flex-wrap items-end gap-3 text-xs"
+        >
+          <input type="hidden" name="pais" value={ctx.pais} />
+          <label className="flex items-center gap-2">
+            <span className="text-ter">Desde</span>
+            <input
+              type="date"
+              name="desde"
+              defaultValue={desde}
+              className="rounded-md border border-borde bg-surface px-2 py-1 text-texto"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-ter">Hasta</span>
+            <input
+              type="date"
+              name="hasta"
+              defaultValue={hasta}
+              className="rounded-md border border-borde bg-surface px-2 py-1 text-texto"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-md border border-borde px-2.5 py-1 text-sec hover:border-sec hover:text-texto"
+          >
+            Aplicar
+          </button>
+          <span className="text-ter">{vista.dias} días</span>
+        </form>
 
-            <section className="mt-5 grid gap-[10px] md:grid-cols-4">
-              <Resumen titulo="Gasto semanal" valor={usd(vista.totalGasto)} />
-              <Resumen
-                titulo="Pacientes nuevos"
-                valor={entero(vista.totalNuevos)}
-              />
-              <Resumen titulo="CAC medio" valor={usd(vista.cacMedio, 1)} />
-              <Resumen titulo="Plataformas a revisar" valor={entero(aRevisar)} />
-            </section>
+        <div className="mt-3">
+          <EditorGasto desde={desde} hasta={hasta} cargado={cargado} />
+        </div>
 
-            <TablaAds filas={filas} />
+        <section className="mt-5 grid gap-[10px] md:grid-cols-4">
+          <Hero
+            titulo="Gasto diario"
+            valor={usd(vista.gastoDiario, 1)}
+            pie={`${usd(vista.gastoTotal)} en el período`}
+          />
+          <Hero
+            titulo="Pacientes diarios"
+            valor={decimal(vista.pacientesDiario)}
+            pie={`${entero(vista.pacientesTotal)} en el período`}
+          />
+          <Hero
+            titulo="CAC"
+            valor={usd(vista.cac, 1)}
+            pie={
+              deltaCac === null
+                ? "sin período anterior"
+                : `${deltaCac >= 0 ? "+" : "−"}${Math.abs(deltaCac * 100).toFixed(0)}% vs. período anterior`
+            }
+            // A CAC going up is bad news, so the arrow reads the other way here.
+            tono={deltaCac === null ? undefined : deltaCac > 0 ? "coral" : "verde"}
+          />
+          <Hero
+            titulo="Retorno diario"
+            valor={vista.retornoDiario === null ? SIN_DATO : usd(vista.retornoDiario, 1)}
+            pie={
+              vista.retornoTotal === null
+                ? "falta el margen por sesión"
+                : `${usd(vista.retornoTotal)} en el período`
+            }
+            tono={
+              vista.retornoDiario === null
+                ? undefined
+                : vista.retornoDiario >= 0
+                  ? "verde"
+                  : "coral"
+            }
+          />
+        </section>
 
-            <section className="mt-8">
-              <h2 className="text-xs uppercase tracking-wide text-ter">
-                Recomendaciones
-              </h2>
-              <Recomendaciones filas={filas} />
-            </section>
-          </>
-        )}
+        <TablaAds filas={vista.filas} />
+
+        {vista.apagadas.length > 0 ? (
+          <details className="mt-8">
+            <summary className="cursor-pointer text-xs uppercase tracking-wide text-ter">
+              Apagadas · {vista.apagadas.length}
+            </summary>
+            <TablaAds filas={vista.apagadas} />
+          </details>
+        ) : null}
       </main>
     </>
   );
 }
 
-/**
- * Two kinds of recommendation, because the two levels answer different
- * questions: what to do with the budget, and which campaign is bringing
- * traffic that does not convert.
- *
- * Every line carries the number it rests on. "Bajar Meta" is an instruction;
- * "Meta devuelve 1,12 por dólar" is a reason.
- */
-function Recomendaciones({
-  filas,
+function Hero({
+  titulo,
+  valor,
+  pie,
+  tono,
 }: {
-  filas: (FilaPlataforma & { veredicto: Veredicto })[];
+  titulo: string;
+  valor: string;
+  pie: string;
+  tono?: "verde" | "coral";
 }) {
-  const presupuesto = filas
-    .filter((f) => f.ratio !== null && f.veredicto !== "sin_dato")
-    .map((f) => {
-      const ratio = f.ratio!.toFixed(2);
-      const donde = `${f.plataforma} · ${f.pais}`;
-      if (f.veredicto === "escalar") {
-        return `Subir ${donde}: devuelve US$ ${ratio} por dólar, con un CAC de ${usd(f.cac, 1)} contra un LTV de ${usd(f.ratio! * f.cac!, 1)}.`;
-      }
-      if (f.veredicto === "apagar") {
-        return `Apagar ${donde}: lleva tres semanas devolviendo menos de lo que cuesta, hoy US$ ${ratio}.`;
-      }
-      if (f.veredicto === "bajar") {
-        return `Bajar ${donde}: devuelve US$ ${ratio} por dólar, por debajo de 1,30.`;
-      }
-      return `Mantener ${donde}: US$ ${ratio} por dólar, dentro de la banda.`;
-    });
-
-  // A campaign is worth naming when it brings volume that does not convert:
-  // the fix is the campaign, not the budget of the whole platform.
-  const campanas = filas.flatMap((f) =>
-    f.campanas
-      .filter((c) => c.alerta)
-      .map(
-        (c) =>
-          `${c.utm_source} trae ${entero(c.registros)} registros en ${f.plataforma} · ${f.pais} y convierte ${porcentaje(c.conversion)}, contra ${porcentaje(f.conversion)} de la plataforma.`,
-      ),
-  );
-
-  const sinMuestra = filas.filter((f) => f.veredicto === "sin_dato");
-
-  return (
-    <>
-      {presupuesto.length > 0 ? (
-        <>
-          <h3 className="mt-3 text-xs text-sec">Presupuesto por plataforma</h3>
-          <ul className="mt-1.5 space-y-1.5 text-sm text-sec">
-            {presupuesto.map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-
-      {campanas.length > 0 ? (
-        <>
-          <h3 className="mt-5 text-xs text-sec">Campañas que no convierten</h3>
-          <ul className="mt-1.5 space-y-1.5 text-sm text-sec">
-            {campanas.map((t) => (
-              <li key={t} className="border-l-2 border-coral pl-3">
-                {t}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-
-      {sinMuestra.length > 0 ? (
-        <p className="mt-5 text-xs text-ter">
-          Sin veredicto por muestra chica, con menos de {MUESTRA_MINIMA}{" "}
-          registros en la semana:{" "}
-          {sinMuestra.map((f) => `${f.plataforma} · ${f.pais}`).join(", ")}.
-        </p>
-      ) : null}
-
-      {presupuesto.length === 0 && campanas.length === 0 ? (
-        <p className="mt-2 text-sm text-sec">
-          Nada para decidir esta semana: ninguna plataforma llega a la muestra
-          mínima de {MUESTRA_MINIMA} registros.
-        </p>
-      ) : null}
-    </>
-  );
-}
-
-function Resumen({ titulo, valor }: { titulo: string; valor: string }) {
+  const color =
+    tono === "verde" ? "text-forest" : tono === "coral" ? "text-coral" : "text-ter";
   return (
     <div className="rounded-lg border border-borde bg-surface px-4 py-3">
       <p className="text-xs text-sec">{titulo}</p>
-      <p className="mt-1 text-2xl text-texto">{valor || SIN_DATO}</p>
+      <p className="mt-1 text-2xl text-texto">{valor}</p>
+      <p className={`mt-0.5 text-xs ${color}`}>{pie}</p>
     </div>
   );
+}
+
+/** Everything already stored for the range, keyed so the editor can look it up. */
+async function gastoCargado(
+  desde: string,
+  hasta: string,
+): Promise<Record<string, number>> {
+  const partes = await Promise.all(
+    PAISES_REALES.flatMap((pais) =>
+      PLATAFORMAS_CON_GASTO.map(async (plataforma) => {
+        const dias = await leerGastoCargado(pais, plataforma, desde, hasta);
+        return Object.fromEntries(
+          Object.entries(dias).map(([f, m]) => [`${pais}|${plataforma}|${f}`, m]),
+        );
+      }),
+    ),
+  );
+  return Object.assign({}, ...partes);
+}
+
+function fecha(valor: string | undefined): string | null {
+  return valor && /^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : null;
 }

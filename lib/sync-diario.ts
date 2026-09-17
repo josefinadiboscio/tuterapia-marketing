@@ -7,6 +7,7 @@ import {
   registrosPorDiaYSource,
   pacientesNuevosPorDia,
   conversionPorDia,
+  sesionesRealizadasPorDia,
   ultimosDias,
   type PorDia,
 } from "@/lib/queries/diarias";
@@ -28,6 +29,7 @@ type FilaDiaria = {
   registros: number | null;
   pacientes_nuevos: number | null;
   pacientes_activos: number | null;
+  sesiones_realizadas: number | null;
   conversion: number | null;
   conversion_proyectada: boolean;
   cohorte_edad_dias: number | null;
@@ -74,6 +76,7 @@ export async function sincronizarDias(
       nuevosSource,
       activosSource,
       convSource,
+      sesionesDia,
     ] = await Promise.all([
       registrosPorDia(mysql, rango, pais),
       registrosPorDiaYSource(mysql, rango, pais),
@@ -83,10 +86,12 @@ export async function sincronizarDias(
       pacientesNuevosPorDiaYSource(mysql, rango, pais),
       pacientesActivosPorDiaYSource(mysql, rango, pais),
       conversionPorDiaYSource(mysql, rango, pais),
+      sesionesRealizadasPorDia(mysql, rango, pais),
     ]);
 
     const porFecha = indexar(registros);
     const nuevosPorFecha = indexar(nuevos);
+    const sesionesPorFecha = indexar(sesionesDia);
 
     for (const dia of conversiones) {
       const edad = edadEnDias(dia.dia, ahora);
@@ -99,6 +104,7 @@ export async function sincronizarDias(
         registros: porFecha.get(dia.dia) ?? 0,
         pacientes_nuevos: nuevosPorFecha.get(dia.dia) ?? 0,
         pacientes_activos: null,
+        sesiones_realizadas: sesionesPorFecha.get(dia.dia) ?? 0,
         conversion: conv.valor,
         conversion_proyectada: conv.proyectada,
         cohorte_edad_dias: edad,
@@ -190,6 +196,8 @@ export async function sincronizarDias(
         registros: regPlat.get(clave) ?? null,
         pacientes_nuevos: nuevosPlat.get(clave) ?? null,
         pacientes_activos: activosPlat.get(clave) ?? null,
+        // Sessions are not split by platform: margin belongs to the country.
+        sesiones_realizadas: null,
         conversion: conv.valor,
         conversion_proyectada: conv.proyectada,
         cohorte_edad_dias: edad,
@@ -241,6 +249,10 @@ function acumularTotal(totales: Map<string, FilaDiaria>, fila: FilaDiaria) {
     previo.pacientes_activos =
       (previo.pacientes_activos ?? 0) + fila.pacientes_activos;
   }
+  if (fila.sesiones_realizadas !== null) {
+    previo.sesiones_realizadas =
+      (previo.sesiones_realizadas ?? 0) + fila.sesiones_realizadas;
+  }
   // Weighted by registrations, which is the cohort each rate is over.
   const pesoPrevio = previo.registros - (fila.registros ?? 0);
   if (previo.conversion !== null && fila.conversion !== null && previo.registros > 0) {
@@ -265,12 +277,14 @@ async function upsert(db: Client, fila: FilaDiaria): Promise<void> {
   await db.query(
     `insert into marketing.metricas_diarias
        (fecha, pais, plataforma, registros, pacientes_nuevos, pacientes_activos,
-        conversion, conversion_proyectada, cohorte_edad_dias, actualizado_en)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+        sesiones_realizadas, conversion, conversion_proyectada,
+        cohorte_edad_dias, actualizado_en)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
      on conflict (fecha, pais, plataforma) do update set
        registros = excluded.registros,
        pacientes_nuevos = excluded.pacientes_nuevos,
        pacientes_activos = excluded.pacientes_activos,
+       sesiones_realizadas = excluded.sesiones_realizadas,
        conversion = excluded.conversion,
        conversion_proyectada = excluded.conversion_proyectada,
        cohorte_edad_dias = excluded.cohorte_edad_dias,
@@ -282,6 +296,7 @@ async function upsert(db: Client, fila: FilaDiaria): Promise<void> {
       fila.registros,
       fila.pacientes_nuevos,
       fila.pacientes_activos,
+      fila.sesiones_realizadas,
       fila.conversion,
       fila.conversion_proyectada,
       fila.cohorte_edad_dias,

@@ -136,3 +136,26 @@ function aSql(ms: number): string {
 }
 
 export { diasLocales };
+
+/**
+ * Sessions realized per day. Not the same as active patients: two sessions by
+ * one patient is one active patient and two sessions' worth of margin, and the
+ * return of a period is about the margin.
+ */
+export async function sesionesRealizadasPorDia(
+  conn: Connection,
+  rango: Rango,
+  pais: Pais,
+): Promise<PorDia[]> {
+  const [rows] = await conn.query<(RowDataPacket & { dia: string; n: number })[]>(
+    `SELECT DATE(DATE_SUB(s.fecha, INTERVAL ${LOCAL_UTC_OFFSET_HOURS} HOUR)) AS dia,
+            COUNT(*) AS n
+       FROM sesiones s
+       JOIN login l ON l.id = s.id_paciente AND l.tipo = 1
+      WHERE s.realizada = 1 AND l.paisDominio = ?
+        AND s.fecha >= ? AND s.fecha < ?
+      GROUP BY dia ORDER BY dia`,
+    [pais, rango.start, rango.end],
+  );
+  return rows.map((r) => ({ dia: String(r.dia), n: Number(r.n) }));
+}

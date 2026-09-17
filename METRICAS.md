@@ -205,12 +205,26 @@ Si sumamos solo a los que además tienen un pago confirmado, el histórico da
 9,06 en AR y 14,33 en UY. Se eligió el denominador ancho: una sesión de promo
 o cortesía sigue siendo una sesión que el paciente hizo.
 
-**Pendiente, y ahora con números.** Con el margen correcto (×0,26), el LTV a 90
-días da **AR US$ 21,6** y el de por vida **AR US$ 49,8**. La referencia que
-maneja el negocio —60 en AR, 120 en UY— es la de por vida. Queda por decidir
-cuál muestra el tablero: el de 90 días es el comparable contra el CAC del mes,
-el de por vida es el que responde "cuánto vale un paciente". Cambiarlo mueve la
-escala del ratio LTV/CAC de Ads y hay que recalibrar los umbrales 1,3 / 1,8.
+**Decidido el 2026-09-17: Ads usa el LTV de por vida que maneja el negocio,
+US$ 60 en AR y US$ 120 en UY.** Es un valor declarado, no derivado: vive en
+`lib/umbrales.ts` (`LTV_USD`) y se cambia ahí. La medición da cerca —AR US$
+49,8 de por vida con el margen correcto— y la diferencia es el redondeo con el
+que se decide, no un cálculo distinto.
+
+De ahí salen las dos cosas que en Ads llevan dólares, y salen del mismo lugar:
+
+```
+retorno_usd[rango] = Σ pacientes_nuevos[pais] × LTV_USD[pais]
+ROAS               = LTV_USD / CAC
+```
+
+Mirando un solo país el LTV es el de ese país; mirando TOTAL es el promedio de
+los dos ponderado por la mezcla real de pacientes del rango, así el ratio se
+mueve con la mezcla igual que se mueve la plata.
+
+El de 90 días (AR US$ 21,6) sigue siendo el comparable estricto contra el CAC
+del mes y no se usa acá. Los umbrales 1,3 / 1,8 vienen de la planilla de Growth
+Control, que razona con estos mismos 60 y 120, así que quedan en escala.
 
 ### CAC
 

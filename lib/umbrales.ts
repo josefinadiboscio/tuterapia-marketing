@@ -24,8 +24,23 @@ export type Tono = "verde" | "oro" | "coral" | "nulo";
  * grey, not red.
  */
 export function tonoDeRoas(roas: number | null | undefined): Tono {
-  if (roas === null || roas === undefined || !Number.isFinite(roas)) return "nulo";
+  if (roas === null || roas === undefined || !Number.isFinite(roas))
+    return "nulo";
   if (roas >= MANTENER) return "verde";
   if (roas >= APAGAR) return "oro";
   return "coral";
 }
+
+/**
+ * What a patient is worth over their life, in dollars of margin, by country.
+ *
+ * The figure the business runs on, decided on 2026-09-17: sixty in Argentina,
+ * a hundred and twenty in Uruguay. It is the lifetime value, not the
+ * ninety-day one — what a campaign returns is what the patient it bought ends
+ * up worth, not what they are worth by the end of the quarter.
+ *
+ * Every dollar figure on Ads comes from here: the daily return and the ROAS
+ * that decides whether a campaign scales or goes off. Change it here and both
+ * change together.
+ */
+export const LTV_USD: Record<string, number> = { AR: 60, UY: 120 };

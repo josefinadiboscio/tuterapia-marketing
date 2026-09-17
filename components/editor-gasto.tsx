@@ -47,104 +47,131 @@ export function EditorGasto({ vigentes }: { vigentes: Vigente[] }) {
       return a + (Number.isFinite(n) ? n : 0);
     }, 0);
 
+  const [abierto, setAbierto] = useState(false);
+
+  // Closed, it is one line: what is being spent per day. That is the only
+  // thing worth screen space every time the screen is opened; the six boxes
+  // matter on the days something changes.
   return (
-    <form action={accion} className="rounded-lg border border-borde bg-surface p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xs uppercase tracking-wide text-ter">Gasto diario</h2>
-          <p className="mt-0.5 text-xs text-sec">
-            Lo que se está poniendo por día, en dólares. Rige hacia adelante
-            hasta que lo cambies.
-          </p>
-        </div>
-        <label className="flex items-center gap-2 text-xs">
-          <span className="text-ter">Rige desde</span>
-          <input
-            type="date"
-            name="desde"
-            defaultValue={hoy()}
-            className="rounded-md border border-borde bg-surface-2 px-2 py-1 text-texto"
-          />
-        </label>
-      </div>
-
-      <table className="mt-4 w-full max-w-md text-sm">
-        <thead>
-          <tr className="text-xs uppercase tracking-wide text-ter">
-            <th className="pb-1 text-left font-normal">Plataforma</th>
-            {PAISES.map((p) => (
-              <th key={p.codigo} className="pb-1 text-right font-normal">
-                {p.nombre}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {PLATAFORMAS.map((plataforma) => (
-            <tr key={plataforma} className="border-t border-borde">
-              <td className="py-1.5 text-texto">{plataforma}</td>
-              {PAISES.map(({ codigo }) => {
-                const clave = `${codigo}|${plataforma}`;
-                const desde = desdePorClave.get(clave) ?? null;
-                return (
-                  <td key={codigo} className="py-1.5 text-right">
-                    <span className="mr-1 text-xs text-ter">US$</span>
-                    <input
-                      name={`monto__${codigo}__${plataforma}`}
-                      value={montos[clave] ?? ""}
-                      onChange={(e) =>
-                        setMontos((m) => ({ ...m, [clave]: e.target.value }))
-                      }
-                      inputMode="decimal"
-                      placeholder="—"
-                      title={desde ? `Vigente desde el ${desde}` : "Sin gasto declarado"}
-                      className="w-20 rounded-md border border-borde bg-surface-2 px-2 py-1 text-right tabular-nums text-texto"
-                    />
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-          <tr className="border-t border-borde text-xs text-sec">
-            <td className="py-1.5">Por día</td>
-            {PAISES.map((p) => (
-              <td key={p.codigo} className="py-1.5 text-right tabular-nums">
-                {usd(totalPais(p.codigo))}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+    <form
+      action={accion}
+      className="rounded-lg border border-borde bg-surface px-4 py-2.5"
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         <button
-          type="submit"
-          disabled={pendiente}
-          className="rounded-md border border-orange bg-orange px-3 py-1 text-xs text-bg disabled:opacity-60"
+          type="button"
+          onClick={() => setAbierto((a) => !a)}
+          className="flex items-center gap-1.5 text-sec hover:text-texto"
         >
-          {pendiente ? "Guardando…" : "Guardar"}
+          <span
+            className={`text-ter transition-transform ${abierto ? "rotate-90" : ""}`}
+          >
+            ›
+          </span>
+          <span className="uppercase tracking-wide text-ter">Gasto diario</span>
         </button>
-        <span className="text-xs text-ter">
-          {usd(total)} por día en total · {usd(total * 30)} al mes
+
+        <span className="tabular-nums text-texto">{usd(total)} por día</span>
+        <span className="text-ter">
+          AR {usd(totalPais("AR"))} · UY {usd(totalPais("UY"))} ·{" "}
+          {usd(total * 30)} al mes
         </span>
+
+        {!abierto ? (
+          <button
+            type="button"
+            onClick={() => setAbierto(true)}
+            className="ml-auto rounded-md border border-borde px-2 py-0.5 text-sec hover:border-sec hover:text-texto"
+          >
+            Editar
+          </button>
+        ) : (
+          <label className="ml-auto flex items-center gap-2">
+            <span className="text-ter">Rige desde</span>
+            <input
+              type="date"
+              name="desde"
+              defaultValue={hoy()}
+              className="rounded-md border border-borde bg-surface-2 px-2 py-1 text-texto"
+            />
+          </label>
+        )}
+
         {estado && "ok" in estado && estado.ok ? (
-          <span className="text-xs text-green">{estado.ok}</span>
+          <span className="text-green">{estado.ok}</span>
         ) : null}
         {estado && "error" in estado && estado.error ? (
-          <span className="text-xs text-coral">{estado.error}</span>
+          <span className="text-coral">{estado.error}</span>
         ) : null}
       </div>
 
-      <p className="mt-2 text-[11px] text-ter">
-        Un cambio no pisa el anterior: guarda una fecha de vigencia, así los
-        días ya pasados conservan el gasto que tuvieron.
-      </p>
+      {/* The fields stay mounted so what was typed survives a collapse. */}
+      <div className={abierto ? "block" : "hidden"}>
+        <table className="mt-3 w-full max-w-md text-sm">
+          <thead>
+            <tr className="text-xs uppercase tracking-wide text-ter">
+              <th className="pb-1 text-left font-normal">Plataforma</th>
+              {PAISES.map((p) => (
+                <th key={p.codigo} className="pb-1 text-right font-normal">
+                  {p.nombre}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {PLATAFORMAS.map((plataforma) => (
+              <tr key={plataforma} className="border-t border-borde">
+                <td className="py-1.5 text-texto">{plataforma}</td>
+                {PAISES.map(({ codigo }) => {
+                  const clave = `${codigo}|${plataforma}`;
+                  const desde = desdePorClave.get(clave) ?? null;
+                  return (
+                    <td key={codigo} className="py-1.5 text-right">
+                      <span className="mr-1 text-xs text-ter">US$</span>
+                      <input
+                        name={`monto__${codigo}__${plataforma}`}
+                        value={montos[clave] ?? ""}
+                        onChange={(e) =>
+                          setMontos((m) => ({ ...m, [clave]: e.target.value }))
+                        }
+                        inputMode="decimal"
+                        placeholder="—"
+                        title={
+                          desde
+                            ? `Vigente desde el ${desde}`
+                            : "Sin gasto declarado"
+                        }
+                        className="w-20 rounded-md border border-borde bg-surface-2 px-2 py-1 text-right tabular-nums text-texto"
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3 pb-1">
+          <button
+            type="submit"
+            disabled={pendiente}
+            className="rounded-md border border-orange bg-orange px-3 py-1 text-xs text-bg disabled:opacity-60"
+          >
+            {pendiente ? "Guardando…" : "Guardar"}
+          </button>
+          <span className="text-[11px] text-ter">
+            Un cambio no pisa el anterior: guarda una fecha de vigencia, así los
+            días ya pasados conservan el gasto que tuvieron.
+          </span>
+        </div>
+      </div>
     </form>
   );
 }
 
 /** Today in Montevideo, which is the day the dashboard counts by. */
 function hoy(): string {
-  return new Date()
-    .toLocaleDateString("en-CA", { timeZone: "America/Montevideo" });
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Montevideo",
+  });
 }

@@ -1,6 +1,12 @@
 import { withDb } from "@/lib/db";
 import { resolverPlataforma, type UtmMapping } from "@/lib/utm";
-import { MUESTRA_MINIMA, ESCALAR, MANTENER, APAGAR } from "@/lib/umbrales";
+import {
+  MUESTRA_MINIMA,
+  ESCALAR,
+  MANTENER,
+  APAGAR,
+  LTV_USD,
+} from "@/lib/umbrales";
 
 /**
  * Ads over a free date range.
@@ -23,6 +29,7 @@ export {
   ESCALAR,
   MANTENER,
   APAGAR,
+  LTV_USD,
 } from "@/lib/umbrales";
 
 /** Meta pays for Instagram, so they share one pool of spend. */
@@ -81,9 +88,12 @@ export type VistaAds = {
   pacientesDiario: number;
   cac: number | null;
   cacPrevio: number | null;
-  /** Margin the period generated, minus what it cost, per day. */
-  retornoDiario: number | null;
-  retornoTotal: number | null;
+  /** New patients times what a patient is worth in their country, per day. */
+  retornoDiario: number;
+  retornoTotal: number;
+  /** The same, after the spend that bought them. */
+  netoDiario: number;
+  netoTotal: number;
   filas: FilaPlataforma[];
   apagadas: FilaPlataforma[];
 };
@@ -137,98 +147,97 @@ export async function leerAds(
       utm,
       semanal,
       descripciones,
-      margen,
+      pacientesPorPais,
       ventasPrevias,
       gastoPrevio,
       gastoSemanal,
     ] = await Promise.all([
-        db.query<UtmMapping>(
-          "select patron, plataforma, superficie, es_pago, orden from marketing.utm_mapping",
-        ),
-        db.query<{ plataforma: string; monto: string; dias: string }>(
-          // How many days of the range carry a row, alongside the total. A day
-          // with no row counts as zero, which is right when nothing ran and
-          // wrong when somebody forgot — and the two are indistinguishable
-          // from the total alone.
-          `select plataforma, sum(monto_usd)::text as monto,
+      db.query<UtmMapping>(
+        "select patron, plataforma, superficie, es_pago, orden from marketing.utm_mapping",
+      ),
+      db.query<{ plataforma: string; monto: string; dias: string }>(
+        // How many days of the range carry a row, alongside the total. A day
+        // with no row counts as zero, which is right when nothing ran and
+        // wrong when somebody forgot — and the two are indistinguishable
+        // from the total alone.
+        `select plataforma, sum(monto_usd)::text as monto,
                   count(distinct fecha)::text as dias
              from (${gastoPorDia("$1", "$2")}) g
             where pais = any($3)
             group by plataforma`,
-          [desde, hasta, paises],
-        ),
-        db.query<{
-          utm_source: string;
-          registros: string;
-          ventas: string;
-          convertidos: string;
-        }>(
-          `select utm_source,
+        [desde, hasta, paises],
+      ),
+      db.query<{
+        utm_source: string;
+        registros: string;
+        ventas: string;
+        convertidos: string;
+      }>(
+        `select utm_source,
                   coalesce(sum(registros), 0)::text as registros,
                   coalesce(sum(pacientes_nuevos), 0)::text as ventas,
                   coalesce(sum(convertidos), 0)::text as convertidos
              from marketing.metricas_utm
             where pais = any($3) and fecha >= $1 and fecha <= $2
             group by utm_source`,
-          [desde, hasta, paises],
-        ),
-        // Six weeks per source, for the trend line and for the weekly ROAS the
-        // switch-off rule needs.
-        db.query<{
-          semana: string;
-          utm_source: string;
-          ventas: string;
-          registros: string;
-        }>(
-          `select to_char(date_trunc('week', fecha), 'YYYY-MM-DD') as semana,
+        [desde, hasta, paises],
+      ),
+      // Six weeks per source, for the trend line and for the weekly ROAS the
+      // switch-off rule needs.
+      db.query<{
+        semana: string;
+        utm_source: string;
+        ventas: string;
+        registros: string;
+      }>(
+        `select to_char(date_trunc('week', fecha), 'YYYY-MM-DD') as semana,
                   utm_source,
                   coalesce(sum(pacientes_nuevos), 0)::text as ventas,
                   coalesce(sum(registros), 0)::text as registros
              from marketing.metricas_utm
             where pais = any($2) and fecha > $1::date - 42 and fecha <= $1::date
             group by 1, 2 order by 1`,
-          [hasta, paises],
-        ),
-        db.query<{ utm_source: string; descripcion: string }>(
-          "select utm_source, descripcion from marketing.utm_descripcion",
-        ),
-        // Sessions realized in the range and the margin each one leaves, so the
-        // return is margin and never revenue.
-        db.query<{ sesiones: string; margen: string | null }>(
-          `select coalesce(sum(d.sesiones_realizadas), 0)::text as sesiones,
-                  (select avg(margen_usd_sesion) from marketing.metricas_mensuales
-                    where plataforma = 'TODAS' and pais = any($3)
-                      and margen_usd_sesion is not null
-                      and mes >= date_trunc('month', $1::date))::text as margen
-             from marketing.metricas_diarias d
-            where d.plataforma = 'TODAS' and d.pais = any($3)
-              and d.fecha >= $1 and d.fecha <= $2`,
-          [desde, hasta, paises],
-        ),
-        db.query<{ ventas: string }>(
-          `select coalesce(sum(pacientes_nuevos), 0)::text as ventas
+        [hasta, paises],
+      ),
+      db.query<{ utm_source: string; descripcion: string }>(
+        "select utm_source, descripcion from marketing.utm_descripcion",
+      ),
+      // New patients split by country: what the period returned is their
+      // count times what a patient is worth there, and the two countries are
+      // worth very different amounts.
+      db.query<{ pais: string; ventas: string }>(
+        `select pais, coalesce(sum(pacientes_nuevos), 0)::text as ventas
+             from marketing.metricas_utm
+            where pais = any($3) and fecha >= $1 and fecha <= $2
+            group by pais`,
+        [desde, hasta, paises],
+      ),
+      db.query<{ ventas: string }>(
+        `select coalesce(sum(pacientes_nuevos), 0)::text as ventas
              from marketing.metricas_utm
             where pais = any($3) and fecha >= $1 and fecha <= $2`,
-          [previo.desde, previo.hasta, paises],
-        ),
-        db.query<{ monto: string }>(
-          `select coalesce(sum(monto_usd), 0)::text as monto
+        [previo.desde, previo.hasta, paises],
+      ),
+      db.query<{ monto: string }>(
+        `select coalesce(sum(monto_usd), 0)::text as monto
              from (${gastoPorDia("$1", "$2")}) g
             where pais = any($3)`,
-          [previo.desde, previo.hasta, paises],
-        ),
-        db.query<{ semana: string; plataforma: string; monto: string }>(
-          `select to_char(date_trunc('week', fecha), 'YYYY-MM-DD') as semana,
+        [previo.desde, previo.hasta, paises],
+      ),
+      db.query<{ semana: string; plataforma: string; monto: string }>(
+        `select to_char(date_trunc('week', fecha), 'YYYY-MM-DD') as semana,
                   plataforma, sum(monto_usd)::text as monto
              from (${gastoPorDia("($1::date - 41)", "$1")}) g
             where pais = any($2)
             group by 1, 2`,
-          [hasta, paises],
-        ),
-      ]);
+        [hasta, paises],
+      ),
+    ]);
 
     const mapa = mapping.rows;
-    const notas = new Map(descripciones.rows.map((d) => [d.utm_source, d.descripcion]));
+    const notas = new Map(
+      descripciones.rows.map((d) => [d.utm_source, d.descripcion]),
+    );
 
     const gastoPlataforma = new Map<string, number>();
     const diasConGasto = new Map<string, number>();
@@ -256,7 +265,10 @@ export async function leerAds(
     const porSemana = new Map<string, Map<string, Sem>>();
     for (const r of semanal.rows) {
       const m = porSemana.get(r.utm_source) ?? new Map<string, Sem>();
-      m.set(r.semana, { ventas: Number(r.ventas), registros: Number(r.registros) });
+      m.set(r.semana, {
+        ventas: Number(r.ventas),
+        registros: Number(r.registros),
+      });
       porSemana.set(r.utm_source, m);
     }
 
@@ -268,7 +280,10 @@ export async function leerAds(
     /** Sales per week, added across whichever sources the row covers. */
     const serieDe = (sources: string[]) =>
       semanas.map((sem) =>
-        sources.reduce((a, s) => a + (porSemana.get(s)?.get(sem)?.ventas ?? 0), 0),
+        sources.reduce(
+          (a, s) => a + (porSemana.get(s)?.get(sem)?.ventas ?? 0),
+          0,
+        ),
       );
 
     const plataformaDe = (source: string) => resolverPlataforma(source, mapa);
@@ -287,14 +302,20 @@ export async function leerAds(
     const plataformaQuePaga = (plataforma: string) =>
       PLATAFORMAS_DE_META.includes(plataforma) ? "Meta" : plataforma;
 
-
-    // Every patient that a paid platform ever sells is worth the same LTV, so
-    // one number serves every ROAS on the screen.
-    const sesiones = Number(margen.rows[0]?.sesiones ?? 0);
-    const margenSesion =
-      margen.rows[0]?.margen == null ? null : Number(margen.rows[0].margen);
-    const margenGenerado = margenSesion === null ? null : sesiones * margenSesion;
-    const ltv = margenSesion === null ? null : margenSesion * SESIONES_DE_POR_VIDA;
+    // What the period brought in, patient by patient, at the value of the
+    // country each one came from.
+    const retornoBruto = pacientesPorPais.rows.reduce(
+      (a, r) => a + Number(r.ventas) * (LTV_USD[r.pais] ?? 0),
+      0,
+    );
+    const pacientesConValor = pacientesPorPais.rows.reduce(
+      (a, r) => a + Number(r.ventas),
+      0,
+    );
+    // One ROAS per row needs one LTV. Looking at a single country it is that
+    // country's; looking at both it is the two blended by the mix of patients
+    // actually sold, so the ratio moves with the mix the way the money does.
+    const ltv = pacientesConValor > 0 ? retornoBruto / pacientesConValor : null;
 
     /**
      * The ROAS of each of the last six weeks, built exactly like the period's:
@@ -399,7 +420,8 @@ export async function leerAds(
         plataforma,
         gasto,
         // Instagram draws on Meta's budget and has none of its own.
-        gastoPropio: !PLATAFORMAS_DE_META.includes(plataforma) || plataforma === "Meta",
+        gastoPropio:
+          !PLATAFORMAS_DE_META.includes(plataforma) || plataforma === "Meta",
         diasConGasto: diasConGasto.get(plataformaQuePaga(plataforma)) ?? 0,
         diasDelRango: dias,
         registros,
@@ -425,7 +447,10 @@ export async function leerAds(
 
     // Every patient of the period, not only those four platforms brought:
     // the CAC denominator is all new patients, the same as on General.
-    const pacientesTotal = [...porSource.values()].reduce((a, v) => a + v.ventas, 0);
+    const pacientesTotal = [...porSource.values()].reduce(
+      (a, v) => a + v.ventas,
+      0,
+    );
     const ventasPrevio = Number(ventasPrevias.rows[0]?.ventas ?? 0);
     const montoPrevio = Number(gastoPrevio.rows[0]?.monto ?? 0);
 
@@ -437,27 +462,21 @@ export async function leerAds(
       gastoDiario: gastoTotal / dias,
       pacientesTotal,
       pacientesDiario: pacientesTotal / dias,
-      cac: pacientesTotal > 0 && gastoTotal > 0 ? gastoTotal / pacientesTotal : null,
-      cacPrevio: ventasPrevio > 0 && montoPrevio > 0 ? montoPrevio / ventasPrevio : null,
-      retornoTotal: margenGenerado === null ? null : margenGenerado - gastoTotal,
-      retornoDiario:
-        margenGenerado === null ? null : (margenGenerado - gastoTotal) / dias,
+      cac:
+        pacientesTotal > 0 && gastoTotal > 0
+          ? gastoTotal / pacientesTotal
+          : null,
+      cacPrevio:
+        ventasPrevio > 0 && montoPrevio > 0 ? montoPrevio / ventasPrevio : null,
+      retornoTotal: retornoBruto,
+      retornoDiario: retornoBruto / dias,
+      netoTotal: retornoBruto - gastoTotal,
+      netoDiario: (retornoBruto - gastoTotal) / dias,
       filas: filas.filter((f) => f.estado !== "apagar"),
       apagadas: filas.filter((f) => f.estado === "apagar"),
     };
   });
 }
-
-/**
- * The lifetime sessions behind every ROAS on this screen.
- *
- * The lifetime count rather than the ninety-day cohort one: what a campaign
- * returns is about what the patient it bought ends up worth, not what they are
- * worth by the end of the quarter. Measured at 8,7 in Argentina and 13,6 in
- * Uruguay; the lower one is used so no campaign is called profitable on the
- * strength of the better market.
- */
-const SESIONES_DE_POR_VIDA = 8.7;
 
 /**
  * `roasSemanal` carries NaN for a week with no spend: that is no ratio at all,
@@ -562,7 +581,10 @@ function periodoPrevio(desde: string, hasta: string) {
 }
 
 /** The default range: the last 30 days the traffic grain covers. */
-export async function rangoPorDefecto(): Promise<{ desde: string; hasta: string }> {
+export async function rangoPorDefecto(): Promise<{
+  desde: string;
+  hasta: string;
+}> {
   return withDb(async (db) => {
     const { rows } = await db.query<{ hasta: string }>(
       "select coalesce(max(fecha), current_date)::text as hasta from marketing.metricas_utm",

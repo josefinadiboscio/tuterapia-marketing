@@ -3,7 +3,7 @@ import { TablaAds } from "@/components/tabla-ads";
 import { EditorGasto } from "@/components/editor-gasto";
 import { leerAds, rangoPorDefecto } from "@/lib/ads";
 import { leerGastoVigente } from "./acciones";
-import { entero, usd, decimal, SIN_DATO } from "@/lib/ui/format";
+import { entero, usd, decimal } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +36,7 @@ export default async function Ads({
 
       <main className="mx-auto max-w-6xl px-6 pb-8 pt-6">
         {/* The range is a form rather than links: any two dates, not a menu. */}
-        <form
-          method="get"
-          className="flex flex-wrap items-end gap-3 text-xs"
-        >
+        <form method="get" className="flex flex-wrap items-end gap-3 text-xs">
           <input type="hidden" name="pais" value={ctx.pais} />
           <label className="flex items-center gap-2">
             <span className="text-ter">Desde</span>
@@ -92,23 +89,18 @@ export default async function Ads({
                 : `${deltaCac >= 0 ? "+" : "−"}${Math.abs(deltaCac * 100).toFixed(0)}% vs. período anterior`
             }
             // A CAC going up is bad news, so the arrow reads the other way here.
-            tono={deltaCac === null ? undefined : deltaCac > 0 ? "coral" : "verde"}
+            tono={
+              deltaCac === null ? undefined : deltaCac > 0 ? "coral" : "verde"
+            }
           />
+          {/* What the day brought in: each new patient at what a patient is
+              worth in their country. The footer nets the spend off it, which
+              is the number that says whether the day was worth it. */}
           <Hero
             titulo="Retorno diario"
-            valor={vista.retornoDiario === null ? SIN_DATO : usd(vista.retornoDiario, 1)}
-            pie={
-              vista.retornoTotal === null
-                ? "falta el margen por sesión"
-                : `${usd(vista.retornoTotal)} en el período`
-            }
-            tono={
-              vista.retornoDiario === null
-                ? undefined
-                : vista.retornoDiario >= 0
-                  ? "verde"
-                  : "coral"
-            }
+            valor={usd(vista.retornoDiario, 1)}
+            pie={`${usd(vista.netoDiario, 1)} por día neto del gasto`}
+            tono={vista.netoDiario >= 0 ? "verde" : "coral"}
           />
         </section>
 
@@ -139,7 +131,11 @@ function Hero({
   tono?: "verde" | "coral";
 }) {
   const color =
-    tono === "verde" ? "text-forest" : tono === "coral" ? "text-coral" : "text-ter";
+    tono === "verde"
+      ? "text-forest"
+      : tono === "coral"
+        ? "text-coral"
+        : "text-ter";
   return (
     <div className="rounded-lg border border-borde bg-surface px-4 py-3">
       <p className="text-xs text-sec">{titulo}</p>

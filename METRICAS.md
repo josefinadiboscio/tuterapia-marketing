@@ -218,6 +218,19 @@ retorno_usd[rango] = Σ pacientes_nuevos[pais] × LTV_USD[pais]
 ROAS               = LTV_USD / CAC
 ```
 
+Al lado del retorno diario va el **múltiplo de la inversión**:
+
+```
+retorno_por_dolar = retorno_usd[rango] / gasto_usd[rango]
+```
+
+Es el mismo LTV/CAC pero de **toda la cuenta**, y es más generoso que el ROAS
+de cualquier fila de la tabla: el numerador cuenta todos los pacientes nuevos
+del período —incluidos los orgánicos— y el denominador solo el gasto pago. Es
+la misma simplificación deliberada que ya tiene el CAC (§4), no un cálculo
+distinto. Últimos 30 días: US$ 60.900 de retorno sobre US$ 11.995 de gasto,
+**5,1x**, con un CAC de cuenta de US$ 15,1.
+
 Mirando un solo país el LTV es el de ese país; mirando TOTAL es el promedio de
 los dos ponderado por la mezcla real de pacientes del rango, así el ratio se
 mueve con la mezcla igual que se mueve la plata.

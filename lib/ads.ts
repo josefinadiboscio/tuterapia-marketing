@@ -94,6 +94,15 @@ export type VistaAds = {
   /** The same, after the spend that bought them. */
   netoDiario: number;
   netoTotal: number;
+  /**
+   * What each dollar of spend brought back, as a multiple.
+   *
+   * It is the LTV/CAC of the whole account — the same ratio the table shows
+   * per platform — and it is kinder than any row of that table, because the
+   * numerator counts every new patient of the period and the denominator only
+   * the paid spend. Organic arrivals are in the return and cost nothing.
+   */
+  retornoPorDolar: number | null;
   filas: FilaPlataforma[];
   apagadas: FilaPlataforma[];
 };
@@ -472,6 +481,7 @@ export async function leerAds(
       retornoDiario: retornoBruto / dias,
       netoTotal: retornoBruto - gastoTotal,
       netoDiario: (retornoBruto - gastoTotal) / dias,
+      retornoPorDolar: gastoTotal > 0 ? retornoBruto / gastoTotal : null,
       filas: filas.filter((f) => f.estado !== "apagar"),
       apagadas: filas.filter((f) => f.estado === "apagar"),
     };

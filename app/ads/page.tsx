@@ -3,7 +3,7 @@ import { TablaAds } from "@/components/tabla-ads";
 import { EditorGasto } from "@/components/editor-gasto";
 import { leerAds, rangoPorDefecto } from "@/lib/ads";
 import { leerGastoVigente } from "./acciones";
-import { entero, usd, decimal } from "@/lib/ui/format";
+import { entero, usd, decimal, multiplo } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +99,17 @@ export default async function Ads({
           <Hero
             titulo="Retorno diario"
             valor={usd(vista.retornoDiario, 1)}
+            // Al lado del número: cuántas veces volvió cada dólar gastado.
+            aureola={
+              vista.retornoPorDolar === null
+                ? undefined
+                : {
+                    texto: multiplo(vista.retornoPorDolar),
+                    titulo:
+                      "Por cada dólar gastado. Es el LTV/CAC de toda la cuenta: el numerador cuenta todos los pacientes nuevos del período y el denominador solo el gasto pago, así que es más generoso que el ROAS de cualquier plataforma.",
+                    tono: vista.retornoPorDolar >= 1 ? "verde" : "coral",
+                  }
+            }
             pie={`${usd(vista.netoDiario, 1)} por día neto del gasto`}
             tono={vista.netoDiario >= 0 ? "verde" : "coral"}
           />
@@ -124,23 +135,33 @@ function Hero({
   valor,
   pie,
   tono,
+  aureola,
 }: {
   titulo: string;
   valor: string;
   pie: string;
   tono?: "verde" | "coral";
+  /** A second figure beside the number, when one number needs another. */
+  aureola?: { texto: string; titulo: string; tono: "verde" | "coral" };
 }) {
-  const color =
-    tono === "verde"
-      ? "text-forest"
-      : tono === "coral"
-        ? "text-coral"
-        : "text-ter";
+  const colorDe = (t?: "verde" | "coral") =>
+    t === "verde" ? "text-forest" : t === "coral" ? "text-coral" : "text-ter";
+
   return (
     <div className="rounded-lg border border-borde bg-surface px-4 py-3">
       <p className="text-xs text-sec">{titulo}</p>
-      <p className="mt-1 text-2xl text-texto">{valor}</p>
-      <p className={`mt-0.5 text-xs ${color}`}>{pie}</p>
+      <p className="mt-1 flex items-baseline gap-2">
+        <span className="text-2xl text-texto">{valor}</span>
+        {aureola ? (
+          <span
+            title={aureola.titulo}
+            className={`cursor-help text-sm ${colorDe(aureola.tono)}`}
+          >
+            {aureola.texto}
+          </span>
+        ) : null}
+      </p>
+      <p className={`mt-0.5 text-xs ${colorDe(tono)}`}>{pie}</p>
     </div>
   );
 }

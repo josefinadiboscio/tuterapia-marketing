@@ -92,3 +92,14 @@ export function decimal(n: number | null): string {
   if (n === null || n === undefined || Number.isNaN(n)) return SIN_DATO;
   return n.toFixed(1).replace(".", ",");
 }
+
+/**
+ * A return as a multiple of what it cost: "4,5x".
+ *
+ * One decimal, because the difference between 4,5 and 4,6 changes nothing and
+ * the difference between 4 and 5 does.
+ */
+export function multiplo(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return SIN_DATO;
+  return `${n.toFixed(1).replace(".", ",")}x`;
+}

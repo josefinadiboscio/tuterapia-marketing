@@ -52,6 +52,9 @@ export type FilaPlataforma = {
   /** Meta's budget, shown on Instagram's row as borrowed rather than owned. */
   gasto: number;
   gastoPropio: boolean;
+  /** Days of the range with a spend row, against the days in it. */
+  diasConGasto: number;
+  diasDelRango: number;
   registros: number;
   ventas: number;
   conversion: number | null;
@@ -107,8 +110,13 @@ export async function leerAds(
         db.query<UtmMapping>(
           "select patron, plataforma, superficie, es_pago, orden from marketing.utm_mapping",
         ),
-        db.query<{ plataforma: string; monto: string }>(
-          `select plataforma, sum(monto_usd)::text as monto
+        db.query<{ plataforma: string; monto: string; dias: string }>(
+          // How many days of the range carry a row, alongside the total. A day
+          // with no row counts as zero, which is right when nothing ran and
+          // wrong when somebody forgot — and the two are indistinguishable
+          // from the total alone.
+          `select plataforma, sum(monto_usd)::text as monto,
+                  count(distinct fecha)::text as dias
              from marketing.gastos_diarios
             where pais = any($3) and fecha >= $1 and fecha <= $2
             group by plataforma`,
@@ -188,8 +196,10 @@ export async function leerAds(
     const notas = new Map(descripciones.rows.map((d) => [d.utm_source, d.descripcion]));
 
     const gastoPlataforma = new Map<string, number>();
+    const diasConGasto = new Map<string, number>();
     for (const g of gastos.rows) {
       gastoPlataforma.set(g.plataforma, Number(g.monto));
+      diasConGasto.set(g.plataforma, Number(g.dias));
     }
     const gastoTotal = [...gastoPlataforma.values()].reduce((a, b) => a + b, 0);
 
@@ -356,6 +366,8 @@ export async function leerAds(
         gasto,
         // Instagram draws on Meta's budget and has none of its own.
         gastoPropio: !PLATAFORMAS_DE_META.includes(plataforma) || plataforma === "Meta",
+        diasConGasto: diasConGasto.get(plataformaQuePaga(plataforma)) ?? 0,
+        diasDelRango: dias,
         registros,
         ventas,
         conversion,

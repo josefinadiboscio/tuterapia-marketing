@@ -93,6 +93,17 @@ export function TablaAds({ filas }: { filas: FilaPlataforma[] }) {
                 <div className="pl-4 text-xs text-ter">
                   {usd(f.gasto)}
                   {f.gastoPropio ? null : " · del presupuesto de Meta"}
+                  {/* A day with no row counts as zero. That is right when
+                      nothing ran and wrong when somebody forgot, so the count
+                      is shown and the judgement stays with whoever reads it. */}
+                  {f.diasConGasto < f.diasDelRango ? (
+                    <span
+                      className="ml-1.5 text-gold"
+                      title="Los días sin gasto cargado cuentan como cero, no heredan el día anterior"
+                    >
+                      · {f.diasConGasto} de {f.diasDelRango} días con gasto
+                    </span>
+                  ) : null}
                 </div>
               </td>
               <td className="py-2 text-center">

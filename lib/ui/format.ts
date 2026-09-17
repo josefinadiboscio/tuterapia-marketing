@@ -86,3 +86,9 @@ export function fecha(iso: string | Date): string {
     timeZone: "America/Montevideo",
   });
 }
+
+/** A plain number with one decimal, for a count that is not money. */
+export function decimal(n: number | null): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return SIN_DATO;
+  return n.toFixed(1).replace(".", ",");
+}

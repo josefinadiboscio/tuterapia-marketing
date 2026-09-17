@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { mesCorto, entero, porcentaje, usd } from "@/lib/ui/format";
+import { mesCorto, entero, porcentaje, usd, decimal } from "@/lib/ui/format";
 import { TooltipUtm, detalleDe } from "@/components/tooltip-utm";
 import type { Punto } from "@/lib/desglose";
 
@@ -39,12 +39,13 @@ export type Techo = { valor: number; etiqueta: string };
  * server component: passing one throws at request time, which a `force-dynamic`
  * page only finds out in production. A name serializes.
  */
-export type FormatoId = "entero" | "porcentaje" | "usd";
+export type FormatoId = "entero" | "porcentaje" | "usd" | "decimal";
 
 const FORMATO: Record<FormatoId, (n: number | null) => string> = {
   entero: (n) => entero(n),
   porcentaje: (n) => porcentaje(n),
   usd: (n) => usd(n, 1),
+  decimal: (n) => decimal(n),
 };
 
 export function GraficoSerie({

@@ -14,7 +14,7 @@ import {
 } from "@/lib/desglose";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
-import { entero, porcentaje, usd, SIN_DATO } from "@/lib/ui/format";
+import { entero, porcentaje, usd, decimal, SIN_DATO } from "@/lib/ui/format";
 import { identidadDe, colorDe, colorPlataforma } from "@/components/identidad";
 
 export const dynamic = "force-dynamic";
@@ -89,15 +89,17 @@ const ECONOMIA = [
       "Gasto del mes sobre los registros del mes. Es el precio del tráfico, antes de convertir.",
   },
   {
-    id: "ltv",
-    nombre: "LTV",
-    campo: (m: MesSerie) => m.ltv_usd,
-    multiplicador: true,
-    formato: (n: number | null) => usd(n, 1),
-    formatoId: "usd" as const,
+    id: "sesiones",
+    nombre: "Sesiones por paciente",
+    campo: (m: MesSerie) => m.sesiones_historico,
+    formato: (n: number | null) => decimal(n),
+    formatoId: "decimal" as const,
     unidad: "pct" as const,
+    // Against the month before, not a six-month slope: this drifts by tenths,
+    // and a slope over tenths reads as noise.
+    contraMesPrevio: true,
     definicion:
-      "Sesiones por paciente sobre cohorte cerrada, por el margen en dólares de cada sesión.",
+      "Sesiones realizadas que hace un paciente a lo largo de toda su vida en Tu Terapia, sobre todos los que hicieron al menos una.",
   },
 ] as const;
 
@@ -211,17 +213,10 @@ type Metrica = {
   /** The same format, as a name: a function cannot cross into the chart. */
   formatoId: FormatoId;
   /**
-   * Show how many sessions a patient does, over their whole life, under the
-   * number.
-   *
-   * Deliberately NOT the figure the LTV above is built from. That one is
-   * windowed at ninety days, which it has to be or an older cohort would
-   * always look better for having had longer; this one is the tenure of the
-   * whole base and is the number anyone actually means by "how many sessions
-   * does a patient do". Written without a × so it does not read as a
-   * multiplication into the number above, because it is not one.
+   * Compare against the month before instead of a six-month slope. For a
+   * number that drifts by tenths, a slope over tenths reads as noise.
    */
-  multiplicador?: boolean;
+  contraMesPrevio?: boolean;
   unidad: "pct" | "pp";
   definicion: string;
 };
@@ -409,13 +404,14 @@ function Card({
             {porPais[0]!.pais} · {porPais[1]!.pais}{" "}
             {metrica.formato(ultimoValor(porPais[1]!.serie, metrica.campo))}
           </p>
-          <TendenciaCard
-            serie={porPais[0]!.serie.filter((m) => !m.es_provisorio)}
-            metrica={metrica}
-          />
-          {metrica.multiplicador ? (
-            <Multiplicador serie={porPais[0]!.serie} />
-          ) : null}
+          {metrica.contraMesPrevio ? (
+            <DeltaMesPrevio serie={porPais[0]!.serie} metrica={metrica} />
+          ) : (
+            <TendenciaCard
+              serie={porPais[0]!.serie.filter((m) => !m.es_provisorio)}
+              metrica={metrica}
+            />
+          )}
         </>
       ) : (
         <>
@@ -423,7 +419,6 @@ function Card({
             {metrica.formato(ultimoValor(serie, metrica.campo))}
           </p>
           <DeltaCard ultimo={ultimo} cerrados={cerrados} metrica={metrica} />
-          {metrica.multiplicador ? <Multiplicador serie={serie} /> : null}
         </>
       )}
     </Link>
@@ -442,34 +437,33 @@ function Card({
  * Reads the last month that HAS a value, the same one the LTV above it is
  * showing: both are null until the cohort closes at ninety days.
  */
-function Multiplicador({ serie }: { serie: MesSerie[] }) {
+/**
+ * How much the number moved since last month, in its own units.
+ *
+ * For a figure that drifts by tenths — the lifetime sessions a patient does —
+ * a six-month slope in percent reads as noise. "+0,2" says the thing itself.
+ */
+function DeltaMesPrevio({
+  serie,
+  metrica,
+}: {
+  serie: MesSerie[];
+  metrica: Metrica;
+}) {
   const cerrados = serie.filter((m) => !m.es_provisorio);
-  const valor = ultimoValor(cerrados, (m) => m.sesiones_historico);
-  if (valor === null) return null;
+  const valor = ultimoValor(cerrados, metrica.campo);
+  const previo = ultimoValor(cerrados.slice(0, -1), metrica.campo);
+  if (valor === null || previo === null) return null;
 
-  // Against the month before, not a six-month slope: this number drifts by
-  // tenths, and a slope over tenths reads as noise.
-  const previo = ultimoValor(cerrados.slice(0, -1), (m) => m.sesiones_historico);
-  const delta = previo === null ? null : valor - previo;
-
-  const uno = (n: number) => n.toFixed(1).replace(".", ",");
-  const tono =
-    delta === null || Math.abs(delta) < 0.05
-      ? "text-ter"
-      : delta > 0
-        ? "text-forest"
-        : "text-coral";
+  const delta = valor - previo;
+  if (Math.abs(delta) < 0.05) {
+    return <p className="mt-1 text-xs text-sec">→ estable vs. el mes anterior</p>;
+  }
 
   return (
-    <p className="mt-0.5 text-xs text-ter">
-      {uno(valor)} sesiones por paciente
-      {delta === null || Math.abs(delta) < 0.05 ? null : (
-        <span className={tono}>
-          {" "}
-          {delta > 0 ? "+" : "−"}
-          {uno(Math.abs(delta))}
-        </span>
-      )}
+    <p className={`mt-1 text-xs ${delta > 0 ? "text-forest" : "text-coral"}`}>
+      {delta > 0 ? "↑ +" : "↓ −"}
+      {Math.abs(delta).toFixed(1).replace(".", ",")} vs. el mes anterior
     </p>
   );
 }
@@ -492,6 +486,10 @@ function DeltaCard({
   cerrados: MesSerie[];
   metrica: Metrica;
 }) {
+  if (metrica.contraMesPrevio) {
+    return <DeltaMesPrevio serie={cerrados} metrica={metrica} />;
+  }
+
   const previo = ultimo && metrica.tramo ? metrica.tramo(ultimo) : null;
   const actual = ultimo ? metrica.campo(ultimo) : null;
 

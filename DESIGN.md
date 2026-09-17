@@ -194,7 +194,8 @@ Se organiza alrededor de **series temporales**, no de cards con deltas.
   Pacientes activos, Conversión — en ese orden. Registros primero porque es la
   entrada del embudo; conversión última porque es la que resume a las otras.
   Gráfico de barras.
-- **Bloque Economía**, en la familia teal: CAC, Costo por registro, LTV.
+- **Bloque Economía**, en la familia teal: CAC, Costo por registro, Sesiones
+  por paciente.
   Gráfico de línea, y **la lectura automática va acá abajo**, sobre fondo
   dorado suave — no al pie de la pantalla.
 - **Las cards son el selector.** Al clickear una, el gráfico de abajo muestra

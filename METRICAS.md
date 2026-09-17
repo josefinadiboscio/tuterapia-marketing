@@ -388,6 +388,113 @@ error más fácil de cometer con esta tabla.
 
 ---
 
+## 6 bis. Funnel por período, sobre compradores
+
+Decidido el 2026-09-18. La pantalla vieja seguía cohortes de **registro**, mes
+a mes. Esta sigue **compradores** sobre un período libre, y la compra es la
+base del embudo, no una etapa intermedia.
+
+**La cohorte es el día de la compra.** No el mes: la fecha de corte de madurez
+de una etapa cae en un día cualquiera, así que el agregado tiene que estar al
+día. Comprador = paciente con su **primer** pago confirmado en la ventana
+(`pacientes_pagos.confirmado = 1`, fecha `creacion`, día local UTC−3).
+
+**Las sesiones se cuentan sobre toda la vida del paciente**, sin ventana, igual
+que en la cohorte mensual. Llegar a la sesión *n* es haber hecho *n* o más, así
+que la tabla es acumulativa por construcción y la caída entre dos etapas es una
+división.
+
+### Filtros
+
+Período de 90, 180 o 365 días. No hay rangos más cortos a propósito: con 30
+días excluidos del hero de no-retorno y 55 días de madurez para la 6ª sesión,
+un período de 30 días se queda sin cohorte que mirar.
+
+### Madurez por etapa
+
+Cada etapa se calcula **solo sobre los compradores del período que tuvieron
+tiempo de llegar a ella**. Días necesarios desde la compra:
+
+| Etapa | Días | De dónde sale |
+|---|---|---|
+| Compraron | 0 | es la base |
+| 1ª sesión | 10 | p80 de compra → 1ª sesión (§5, §8) |
+| 2ª sesión | 19 | + 9 días de promedio entre sesiones |
+| 3ª sesión | 28 | + 9 |
+| 4ª sesión | 37 | + 9 |
+| 5ª sesión | 46 | + 9 |
+| 6ª sesión | 55 | + 9 |
+
+`madurez(n) = 10 + (n − 1) × 9`. Se usa el p80 y no la mediana: una etapa está
+madura cuando la mayoría de la cohorte tuvo el tiempo, no cuando lo tuvo la
+mitad.
+
+Si en el período elegido ningún comprador tiene esa edad, **la fila va vacía**.
+Nunca un número sobre pocos casos, y nunca un cero: cero llegadas y ninguna
+oportunidad de llegar no son lo mismo. Cada fila muestra su `n`, que es la
+cantidad de compradores maduros sobre la que se calcula.
+
+### Las dos columnas de porcentaje
+
+| Columna | Fórmula | Qué lee |
+|---|---|---|
+| % del total | `llegaron[n] / n_maduros[n]` | retención acumulada contra la compra |
+| % caída | `(llegaron[n−1] − llegaron[n]) / llegaron[n−1]` | el escalón contra la etapa anterior |
+
+Las dos, siempre. La primera dice cuánta gente queda; la segunda, dónde se
+fue. Y las dos se calculan **sobre la misma población**: el `llegaron[n−1]` del
+escalón se recalcula dentro del corte de madurez de la etapa *n*, no se toma de
+la fila de arriba. Una caída medida entre dos denominadores distintos no es una
+caída.
+
+El delta es contra el **período anterior del mismo largo**, en puntos
+porcentuales, sobre la columna de caída. Verde si cae menos, ámbar si cae más.
+
+### No vuelven tras la 1ª
+
+```
+no_vuelven = llegaron[1] − llegaron[2]   (compras hasta hoy − 30 días)
+pct        = no_vuelven / llegaron[1]
+```
+
+**Se excluyen los últimos 30 días**: quien compró el martes no "no volvió",
+todavía no tuvo la chance. Treinta días alcanzan para la primera sesión (10) y
+la segunda (19) con margen. La card muestra la cantidad de personas, el
+porcentaje, el delta en puntos contra el período anterior, y debajo sobre
+cuántos compradores con 1ª sesión se calcula y hasta qué fecha de compra.
+
+No se llama "caída de 1ª sesión": ese nombre se confunde con los que compran y
+nunca se sientan, que es el escalón *compra → 1ª* de la tabla.
+
+### Tiempo entre sesiones
+
+Tramos: compra → 1ª, y 1ª → 2ª hasta 5ª → 6ª. Mediana y p80 en días locales
+(UTC−3), nunca UTC. Un tramo madura con la etapa a la que llega, así que usa el
+mismo corte que ella.
+
+Se guarda el **histograma** de días, no la mediana: una mediana no se suma, y la
+pantalla suma el rango que se le pida. Con la distribución, la mediana y el p80
+de cualquier ventana salen exactos. Percentil por rango cercano, sin
+interpolar: los valores son días enteros y una mediana de 4,5 días no se puede
+accionar.
+
+Una brecha negativa se lleva a cero. Pasa cuando hubo una sesión de cortesía
+antes del pago, y una espera no puede ser menos que nada.
+
+### Lectura automática
+
+Tres reglas, y ninguna es una opinión:
+
+1. **El tramo más caro** es la etapa madura con mayor `% caída`, incluido el
+   escalón compra → 1ª.
+2. **Cuánto pesa** es `cayeron[peor] / Σ cayeron[todas las etapas maduras]`,
+   dicho como "ahí se va X% de todo lo que se pierde hasta la 6ª sesión".
+3. **Si viene mejorando** sale del delta de ese mismo escalón contra el período
+   anterior: mejora o empeora con un punto porcentual o más de movimiento,
+   estable dentro de eso.
+
+---
+
 ## 7. UTMs
 
 Columnas en `login`: `utm_source`, `utm_campaign`, `utm_content`.
@@ -562,6 +669,48 @@ correr dos veces.
 Cada corrida escribe también en `marketing.sync_log` (timestamp, filas,
 error). El dashboard muestra la última sincronización en el header. Sin eso,
 un cron caído pasa desapercibido durante semanas.
+
+### Las tablas del Funnel son la excepción a "nunca recalcular un mes cerrado"
+
+```sql
+create table marketing.funnel_etapas (
+  fecha_compra date not null,   -- día local del primer pago confirmado
+  pais         text not null,
+  nro_sesion   int  not null,   -- 0 = compró; 1..12 = llegó a esa sesión
+  pacientes    int  not null,
+  primary key (fecha_compra, pais, nro_sesion)
+);
+
+create table marketing.funnel_tiempos (
+  fecha_compra date not null,
+  pais         text not null,
+  tramo        int  not null,   -- 0 = compra -> 1ª ... 5 = 5ª -> 6ª
+  dias         int  not null,
+  pacientes    int  not null,
+  primary key (fecha_compra, pais, tramo, dias)
+);
+```
+
+Una cohorte de compradores **no deja de moverse nunca**: quien compró en marzo
+puede hacer su sexta sesión en septiembre, así que la fila de marzo es distinta
+hoy que ayer. El job reescribe una ventana móvil de 760 días de fechas de
+compra en cada corrida, no solo el mes en curso.
+
+760 y no 365 porque la pantalla compara contra el período anterior del mismo
+largo: un período de 365 días necesita 730 días de historia detrás, más margen.
+
+Es barato a pesar del largo: un día tiene un puñado de compradores, así que la
+ventana entera son decenas de miles de filas, todas agregadas del lado de
+MySQL. Se borra y se reinserta el rango en una transacción, en lugar de hacer
+upsert: un pago que se desconfirma tiene que desaparecer, y un upsert lo
+dejaría ahí para siempre.
+
+`marketing.metricas_mensuales` sigue intacta bajo la regla original. La
+excepción es de estas dos tablas y de ningún otro agregado.
+
+`marketing.cohorte_sesiones` se queda donde está, con la cohorte de registro
+mensual: de ahí sale la exportación de cohorte (`/api/funnel/csv`). Son dos
+preguntas distintas y no se pisan.
 
 ---
 

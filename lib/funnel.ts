@@ -1,304 +1,474 @@
 import { withDb } from "@/lib/db";
+import { LOCAL_UTC_OFFSET_HOURS } from "@/lib/queries/shared";
 
 /**
- * The funnel is one cohort followed forward, not a set of monthly totals
- * stacked on top of each other.
+ * The funnel, over buyers, on a free period.
  *
- * That distinction was wrong until now and it mattered: Registros counted the
- * people who signed up in the month, while Compraron counted the sales closed
- * in the month — whoever they were and whenever they had signed up. The drop
- * between the two was a comparison of two different populations.
+ * The cohort is whoever BOUGHT inside the window, and every stage is the same
+ * group of people followed forward: how many of them sat down once, twice, six
+ * times. The purchase is the base and it is drawn, because without it the
+ * no-show between paying and sitting down has nowhere to show up.
  *
- * Every stage here is the same group of people: those who registered in the
- * month. How many of them bought, how many did a first session, a second, and
- * so on to the twelfth.
+ * Each stage is cut at its own maturity. A period of ninety days holds buyers
+ * from yesterday, and yesterday's buyer has not had time to do a sixth
+ * session; counting them in the denominator would draw a drop that is only the
+ * calendar. So stage k is computed over the buyers of the window who are at
+ * least `madurez(k)` days old, and the row says how many that is.
+ *
+ * That is also why both percentage columns exist and neither replaces the
+ * other: one reads the accumulated retention against the purchase, the other
+ * reads the single step, and a step is only comparable against the previous
+ * stage measured on the same population.
  */
 
-/** The last stage the screen draws. Two more are stored, so the tenth has somewhere to fall to. */
-export const ULTIMA_ETAPA = 10;
+export const PERIODOS = [90, 180, 365] as const;
+export type Periodo = (typeof PERIODOS)[number];
+
+/** The last session the screen draws. The table stores twelve. */
+export const ULTIMA_ETAPA = 6;
 
 /**
- * How long an nth session needs, measured against the YOUNGEST member of the
- * cohort rather than the oldest.
+ * How long a stage needs before its number means anything, in days from the
+ * purchase.
  *
- * Both numbers are measured, not assumed. Getting to a first session takes a
- * median of 3 to 4 days with a p80 of 8 to 12, so the p80 is the wait here.
- * The gap from a first session to a second averages 9 days.
- *
- * Counting from the first of the month was the bug: the September cohort was
- * fifteen days old by that count and drew a 89% drop from first to second
- * session, when its newest members had had a single day to come back. A
- * cohort is only ready when everyone in it has had the time, so the clock
- * starts the day the month closes.
+ * Both numbers are measured, not assumed (METRICAS.md §5 and §8): getting to a
+ * first session runs a median of 3 to 4 days with a p80 near 10, and the gap
+ * between two sessions averages 9. The p80 is used rather than the median so a
+ * stage is called mature when most of the cohort has had the time, not half.
  */
-const DIAS_PRIMERA_SESION = 10;
+const DIAS_A_PRIMERA = 10;
 const DIAS_ENTRE_SESIONES = 9;
 
-export type Etapa = {
-  nombre: string;
-  /** null means the cohort has not had time to get here yet, never zero. */
-  valor: number | null;
-};
+/** Days a buyer needs to have had to be counted in stage `nro`. */
+export function madurez(nro: number): number {
+  if (nro <= 0) return 0;
+  return DIAS_A_PRIMERA + (nro - 1) * DIAS_ENTRE_SESIONES;
+}
 
-export type PasoCohorte = {
-  /** 1 means the step from session 1 to session 2. */
-  desde: number;
-  /** Share of those who reached `desde` that never reached the next one. */
+/**
+ * The no-return card only counts buyers with at least this many days behind
+ * them. Enough for the median buyer to have had a first session and a second:
+ * ten days plus nine, with room to spare.
+ */
+const DIAS_PARA_VOLVER = 30;
+
+export type FilaEtapa = {
+  nro: number;
+  etiqueta: string;
+  /** Buyers of the window old enough for this stage. null: none are. */
+  n: number | null;
+  llegaron: number | null;
+  /** Share of this row's own base that got here. */
+  pctDelTotal: number | null;
+  cayeron: number | null;
+  /** Share of the previous stage, on this row's base, that stopped here. */
   caida: number | null;
+  /** Change of that drop against the previous period, in points. */
+  deltaPp: number | null;
+  /** Last day of purchase this row can include. */
+  corte: string | null;
 };
 
-export type FilaCohorte = {
-  cohorte: string;
-  n: number;
-  pasos: PasoCohorte[];
+export type FilaTiempo = {
+  tramo: number;
+  etiqueta: string;
+  mediana: number | null;
+  p80: number | null;
+  /** Change of the median against the previous period, in days. */
+  deltaDias: number | null;
+  n: number | null;
+};
+
+export type NoVuelven = {
+  personas: number;
+  pct: number;
+  deltaPp: number | null;
+  /** Buyers with a first session the figure rests on. */
+  base: number;
+  /** Last day of purchase counted. */
+  hasta: string;
 };
 
 export type VistaFunnel = {
-  mes: string | null;
-  etapas: Etapa[];
-  medianaSesion: number | null;
-  p80Sesion: number | null;
-  compranEn24h: number | null;
-  noShow: number | null;
-  caida1a2: number | null;
-  grilla: FilaCohorte[];
+  periodo: Periodo;
+  desde: string;
+  hasta: string;
+  compradores: number;
+  deltaCompradores: number | null;
+  noVuelven: NoVuelven | null;
+  etapas: FilaEtapa[];
+  tiempos: FilaTiempo[];
+  lectura: string | null;
+  /** Cohort months, for the nominal download. */
   meses: string[];
 };
 
+const ETIQUETA_ETAPA = [
+  "Compraron",
+  "1ª sesión",
+  "2ª sesión",
+  "3ª sesión",
+  "4ª sesión",
+  "5ª sesión",
+  "6ª sesión",
+];
+
+const ETIQUETA_TRAMO = [
+  "Compra → 1ª",
+  "1ª → 2ª",
+  "2ª → 3ª",
+  "3ª → 4ª",
+  "4ª → 5ª",
+  "5ª → 6ª",
+];
+
 export async function leerFunnel(
   pais: string,
-  mes?: string,
+  periodo: Periodo,
+  ahora = new Date(),
 ): Promise<VistaFunnel> {
-  return withDb(async (db) => {
-    const { rows: meses } = await db.query<{ mes: string }>(
-      `select distinct to_char(mes, 'YYYY-MM') as mes
-         from marketing.metricas_mensuales
-        where es_provisorio = false order by mes desc limit 12`,
-    );
-    const disponibles = meses.map((m) => m.mes);
-    const elegido = mes && disponibles.includes(mes) ? mes : (disponibles[0] ?? null);
+  const paises = pais === "TOTAL" ? ["AR", "UY"] : [pais];
+  const hoy = diaLocal(ahora);
+  const hasta = hoy;
+  const desde = sumarDias(hasta, -(periodo - 1));
+  const previo = { desde: sumarDias(desde, -periodo), hasta: sumarDias(desde, -1) };
 
-    if (!elegido) {
+  // Stage k can only count buyers who are madurez(k) days old.
+  const cortes = Array.from({ length: ULTIMA_ETAPA + 1 }, (_, nro) =>
+    minimo(hasta, sumarDias(hoy, -madurez(nro))),
+  );
+  // Every day of the previous period is older than the whole period, which is
+  // longer than the longest maturity, so nothing there needs cutting.
+  const cortesPrevios = cortes.map(() => previo.hasta);
+
+  return withDb(async (db) => {
+    const [actual, anterior, tiempos, tiemposPrevios, retorno, meses] =
+      await Promise.all([
+        etapas(db, paises, desde, cortes),
+        etapas(db, paises, previo.desde, cortesPrevios),
+        histograma(db, paises, desde, cortes),
+        histograma(db, paises, previo.desde, cortesPrevios),
+        sinRetorno(db, paises, desde, hasta, previo, hoy),
+        db.query<{ mes: string }>(
+          `select distinct to_char(mes, 'YYYY-MM') as mes
+             from marketing.metricas_mensuales
+            where es_provisorio = false order by mes desc limit 12`,
+        ),
+      ]);
+
+    const filas = armarEtapas(actual, anterior, cortes);
+
+    return {
+      periodo,
+      desde,
+      hasta,
+      compradores: actual.get(0)?.base ?? 0,
+      deltaCompradores: delta(
+        actual.get(0)?.base ?? 0,
+        anterior.get(0)?.base ?? 0,
+      ),
+      noVuelven: retorno,
+      etapas: filas,
+      tiempos: armarTiempos(tiempos, tiemposPrevios),
+      lectura: lecturaDe(filas),
+      meses: meses.rows.map((m) => m.mes),
+    };
+  });
+}
+
+type Conteo = { base: number; previa: number; actual: number };
+
+/**
+ * For every stage, three counts over the same population: the buyers that are
+ * old enough, how many of them reached the stage before, and how many reached
+ * this one.
+ *
+ * All three inside the stage's own cut, which is what makes the step
+ * comparable — a drop measured between two different denominators is not a
+ * drop.
+ */
+async function etapas(
+  db: import("pg").Client,
+  paises: string[],
+  desde: string,
+  cortes: string[],
+): Promise<Map<number, Conteo>> {
+  const { rows } = await db.query<{
+    nro: number;
+    base: string;
+    previa: string;
+    actual: string;
+  }>(
+    `with etapa as (
+       select nro, corte from unnest($3::int[], $4::date[]) as t(nro, corte)
+     )
+     select e.nro,
+            coalesce(sum(case when f.nro_sesion = 0 then f.pacientes end), 0)::text
+              as base,
+            coalesce(sum(case when f.nro_sesion = e.nro - 1 then f.pacientes end), 0)::text
+              as previa,
+            coalesce(sum(case when f.nro_sesion = e.nro then f.pacientes end), 0)::text
+              as actual
+       from etapa e
+       left join marketing.funnel_etapas f
+              on f.pais = any($1)
+             and f.fecha_compra >= $2
+             and f.fecha_compra <= e.corte
+      group by e.nro`,
+    [paises, desde, cortes.map((_, i) => i), cortes],
+  );
+
+  return new Map(
+    rows.map((r) => [
+      Number(r.nro),
+      {
+        base: Number(r.base),
+        previa: Number(r.previa),
+        actual: Number(r.actual),
+      },
+    ]),
+  );
+}
+
+function armarEtapas(
+  actual: Map<number, Conteo>,
+  anterior: Map<number, Conteo>,
+  cortes: string[],
+): FilaEtapa[] {
+  const caidaDe = (c: Conteo | undefined, nro: number): number | null => {
+    if (nro === 0 || !c || c.previa === 0) return null;
+    return (c.previa - c.actual) / c.previa;
+  };
+
+  return ETIQUETA_ETAPA.map((etiqueta, nro) => {
+    const c = actual.get(nro);
+    const vacia = !c || c.base === 0;
+
+    if (nro === 0) {
       return {
-        mes: null,
-        etapas: [],
-        medianaSesion: null,
-        p80Sesion: null,
-        compranEn24h: null,
-        noShow: null,
-        caida1a2: null,
-        grilla: [],
-        meses: [],
+        nro,
+        etiqueta,
+        n: vacia ? null : c!.base,
+        llegaron: vacia ? null : c!.base,
+        pctDelTotal: vacia ? null : 1,
+        cayeron: null,
+        caida: null,
+        deltaPp: null,
+        corte: cortes[nro] ?? null,
       };
     }
 
-    const [mensual, sesiones, grillaRaw] = await Promise.all([
-      db.query<{
-        registros: number;
-        mediana_dias_sesion: string | null;
-        p80_dias_sesion: string | null;
-        compran_24h: string | null;
-      }>(
-        `select registros, mediana_dias_sesion::text, p80_dias_sesion::text,
-                compran_24h::text
-           from marketing.metricas_mensuales
-          where pais = $1 and plataforma = 'TODAS'
-            and to_char(mes, 'YYYY-MM') = $2`,
-        [pais, elegido],
-      ),
-      db.query<{
-        nro_sesion: number;
-        pacientes: number;
-        cohorte_n: number;
-        cohorte_compraron: number | null;
-      }>(
-        `select nro_sesion, pacientes, cohorte_n, cohorte_compraron
-           from marketing.cohorte_sesiones
-          where pais = $1 and to_char(cohorte, 'YYYY-MM') = $2
-          order by nro_sesion`,
-        [pais, elegido],
-      ),
-      db.query<{
-        cohorte: string;
-        edad_dias: number;
-        n: number;
-        nro_sesion: number;
-        pacientes: number;
-      }>(
-        `select to_char(cohorte, 'YYYY-MM') as cohorte,
-                -- Days since the month CLOSED, so the number holds for
-                -- whoever signed up on its last day too.
-                (current_date - (cohorte + interval '1 month')::date)::int
-                  as edad_dias,
-                cohorte_n as n, nro_sesion, pacientes
-           from marketing.cohorte_sesiones
-          where pais = $1
-            and cohorte >= (date_trunc('month', current_date) - interval '6 months')
-          order by cohorte desc, nro_sesion`,
-        [pais],
-      ),
-    ]);
-
-    const fila = mensual.rows[0];
-    const registros = fila?.registros ?? null;
-
-    // Of the people who registered this month, how many ever bought — no
-    // window. conversion_cohorte stops at thirty days, and the session stages
-    // below have no clock at all, so using it here drew a first session larger
-    // than the purchase above it.
-    const compraron = sesiones.rows[0]?.cohorte_compraron ?? null;
-
-    const edad = edadDeCohorte(elegido);
-    const porSesion = new Map(sesiones.rows.map((r) => [r.nro_sesion, r.pacientes]));
-
-    const etapas: Etapa[] = [
-      { nombre: "Registros", valor: registros },
-      { nombre: "Compraron", valor: compraron },
-      ...Array.from({ length: ULTIMA_ETAPA }, (_, i) => {
-        const nro = i + 1;
-        return {
-          nombre: `${nro}ª sesión`,
-          valor: alcanzable(edad, nro) ? (porSesion.get(nro) ?? 0) : null,
-        };
-      }),
-    ];
-
-    const s1 = porSesion.get(1) ?? null;
-    const s2 = porSesion.get(2) ?? null;
+    const caida = caidaDe(c, nro);
+    const caidaPrevia = caidaDe(anterior.get(nro), nro);
 
     return {
-      mes: elegido,
-      etapas,
-      // The distance to sitting down, not to paying. Paying is a click and
-      // happens the same day for most people, which is why that median reads
-      // zero; finding a slot in a diary takes three to five days.
-      medianaSesion:
-        fila?.mediana_dias_sesion == null ? null : Number(fila.mediana_dias_sesion),
-      p80Sesion:
-        fila?.p80_dias_sesion == null ? null : Number(fila.p80_dias_sesion),
-      compranEn24h:
-        fila?.compran_24h == null ? null : Number(fila.compran_24h),
-      // Of those who bought, how many never sat down.
-      noShow:
-        compraron && compraron > 0 && s1 !== null
-          ? Math.max(0, (compraron - s1) / compraron)
-          : null,
-      caida1a2:
-        s1 && s1 > 0 && s2 !== null && alcanzable(edad, 2) ? (s1 - s2) / s1 : null,
-      grilla: armarGrilla(grillaRaw.rows),
-      meses: disponibles,
+      nro,
+      etiqueta,
+      n: vacia ? null : c!.base,
+      llegaron: vacia ? null : c!.actual,
+      pctDelTotal: vacia ? null : c!.actual / c!.base,
+      cayeron: vacia || caida === null ? null : c!.previa - c!.actual,
+      caida,
+      deltaPp:
+        caida === null || caidaPrevia === null ? null : caida - caidaPrevia,
+      corte: cortes[nro] ?? null,
+    };
+  });
+}
+
+/** The day histogram of every trip, each one inside its own maturity cut. */
+async function histograma(
+  db: import("pg").Client,
+  paises: string[],
+  desde: string,
+  cortes: string[],
+): Promise<Map<number, { dias: number; n: number }[]>> {
+  // Trip t is complete when session t+1 happens, so it matures with that stage.
+  const tramos = ETIQUETA_TRAMO.map((_, t) => t);
+  const { rows } = await db.query<{ tramo: number; dias: number; n: string }>(
+    `with tramo as (
+       select tramo, corte from unnest($3::int[], $4::date[]) as t(tramo, corte)
+     )
+     select t.tramo, f.dias, sum(f.pacientes)::text as n
+       from tramo t
+       join marketing.funnel_tiempos f
+              on f.tramo = t.tramo
+             and f.pais = any($1)
+             and f.fecha_compra >= $2
+             and f.fecha_compra <= t.corte
+      group by t.tramo, f.dias
+      order by t.tramo, f.dias`,
+    [paises, desde, tramos, tramos.map((t) => cortes[t + 1] ?? cortes.at(-1)!)],
+  );
+
+  const salida = new Map<number, { dias: number; n: number }[]>();
+  for (const r of rows) {
+    const lista = salida.get(Number(r.tramo)) ?? [];
+    lista.push({ dias: Number(r.dias), n: Number(r.n) });
+    salida.set(Number(r.tramo), lista);
+  }
+  return salida;
+}
+
+function armarTiempos(
+  actual: Map<number, { dias: number; n: number }[]>,
+  anterior: Map<number, { dias: number; n: number }[]>,
+): FilaTiempo[] {
+  return ETIQUETA_TRAMO.map((etiqueta, tramo) => {
+    const h = actual.get(tramo) ?? [];
+    const total = h.reduce((a, x) => a + x.n, 0);
+    const mediana = percentil(h, 0.5);
+    const medianaPrevia = percentil(anterior.get(tramo) ?? [], 0.5);
+
+    return {
+      tramo,
+      etiqueta,
+      mediana,
+      p80: percentil(h, 0.8),
+      deltaDias:
+        mediana === null || medianaPrevia === null ? null : mediana - medianaPrevia,
+      n: total === 0 ? null : total,
     };
   });
 }
 
 /**
- * The drop grid: one row per cohort, one column per step between sessions.
+ * Nearest-rank percentile over a histogram: the first day value at which the
+ * running count reaches the share asked for.
  *
- * A cell is null when the cohort has not had time to reach the far side of the
- * step. The job stores a zero there — nobody has got that far yet, which is
- * true — and a zero drawn as a drop would read as "everybody left".
+ * No interpolation. The values are whole days and a median of 4,5 days would
+ * be a number nobody can act on.
  */
-function armarGrilla(
-  filas: {
-    cohorte: string;
-    edad_dias: number;
-    n: number;
-    nro_sesion: number;
-    pacientes: number;
-  }[],
-): FilaCohorte[] {
-  const porCohorte = new Map<
-    string,
-    { n: number; edad: number; sesiones: Map<number, number> }
-  >();
+function percentil(
+  histograma: { dias: number; n: number }[],
+  parte: number,
+): number | null {
+  const total = histograma.reduce((a, x) => a + x.n, 0);
+  if (total === 0) return null;
 
-  for (const f of filas) {
-    const c = porCohorte.get(f.cohorte) ?? {
-      n: f.n,
-      edad: f.edad_dias,
-      sesiones: new Map<number, number>(),
-    };
-    c.sesiones.set(f.nro_sesion, f.pacientes);
-    porCohorte.set(f.cohorte, c);
+  const objetivo = Math.ceil(total * parte);
+  let acumulado = 0;
+  for (const { dias, n } of [...histograma].sort((a, b) => a.dias - b.dias)) {
+    acumulado += n;
+    if (acumulado >= objetivo) return dias;
   }
-
-  return [...porCohorte.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([cohorte, c]) => ({
-      cohorte,
-      n: c.n,
-      pasos: Array.from({ length: ULTIMA_ETAPA - 1 }, (_, i) => {
-        const desde = i + 1;
-        const a = c.sesiones.get(desde);
-        const b = c.sesiones.get(desde + 1);
-        const maduro = alcanzable(c.edad, desde + 1);
-        return {
-          desde,
-          caida: maduro && a && a > 0 && b !== undefined ? (a - b) / a : null,
-        };
-      }),
-    }));
-}
-
-/** `edadDias` is measured from the day the cohort's month closed, not from its first day. */
-function alcanzable(edadDias: number, nroSesion: number): boolean {
-  return edadDias >= DIAS_PRIMERA_SESION + (nroSesion - 1) * DIAS_ENTRE_SESIONES;
+  return null;
 }
 
 /**
- * Days since the cohort's month ENDED, so the number holds for everyone in it,
- * including whoever signed up on the last day. Negative for a month still
- * running, which is clamped to zero: nothing about it is ready to read.
- */
-function edadDeCohorte(mes: string): number {
-  const [year, month] = mes.split("-").map(Number);
-  const fin = Date.UTC(year!, month!, 1, 3);
-  return Math.max(0, Math.floor((Date.now() - fin) / 86_400_000));
-}
-
-/**
- * The step that loses the most people, and whether it is getting better.
+ * Of the people who sat down once, how many never came back.
  *
- * "Better" is the three most recent cohorts old enough to have a value against
- * the three before them. With fewer than that it says nothing rather than
- * calling two months a trend.
+ * Only buyers with thirty days behind them: somebody who bought on Tuesday has
+ * not "failed to return", they have not had the chance. Excluding them is what
+ * keeps the number from moving every time a good week of sales comes in.
  */
-export function lecturaGrilla(grilla: FilaCohorte[]): string | null {
-  if (grilla.length === 0) return null;
+async function sinRetorno(
+  db: import("pg").Client,
+  paises: string[],
+  desde: string,
+  hasta: string,
+  previo: { desde: string; hasta: string },
+  hoy: string,
+): Promise<NoVuelven | null> {
+  const corte = minimo(hasta, sumarDias(hoy, -DIAS_PARA_VOLVER));
+  if (corte < desde) return null;
 
-  const promedio = (paso: number) => {
-    const valores = grilla
-      .map((f) => f.pasos.find((p) => p.desde === paso)?.caida)
-      .filter((v): v is number => v !== null && v !== undefined);
-    return valores.length === 0
-      ? null
-      : valores.reduce((a, b) => a + b, 0) / valores.length;
+  const contar = async (d: string, h: string) => {
+    const { rows } = await db.query<{ primera: string; segunda: string }>(
+      `select coalesce(sum(case when nro_sesion = 1 then pacientes end), 0)::text
+                as primera,
+              coalesce(sum(case when nro_sesion = 2 then pacientes end), 0)::text
+                as segunda
+         from marketing.funnel_etapas
+        where pais = any($1) and fecha_compra >= $2 and fecha_compra <= $3`,
+      [paises, d, h],
+    );
+    return {
+      primera: Number(rows[0]?.primera ?? 0),
+      segunda: Number(rows[0]?.segunda ?? 0),
+    };
   };
 
-  let peor: { paso: number; valor: number } | null = null;
-  for (let paso = 1; paso < ULTIMA_ETAPA; paso++) {
-    const v = promedio(paso);
-    if (v !== null && (peor === null || v > peor.valor)) peor = { paso, valor: v };
-  }
-  if (peor === null) return null;
+  const [ahora, antes] = await Promise.all([
+    contar(desde, corte),
+    contar(previo.desde, previo.hasta),
+  ]);
 
-  const serie = grilla
-    .map((f) => f.pasos.find((p) => p.desde === peor!.paso)?.caida)
-    .filter((v): v is number => v !== null && v !== undefined);
+  if (ahora.primera === 0) return null;
 
+  const pct = (ahora.primera - ahora.segunda) / ahora.primera;
+  const pctPrevio =
+    antes.primera === 0 ? null : (antes.primera - antes.segunda) / antes.primera;
+
+  return {
+    personas: ahora.primera - ahora.segunda,
+    pct,
+    deltaPp: pctPrevio === null ? null : pct - pctPrevio,
+    base: ahora.primera,
+    hasta: corte,
+  };
+}
+
+/**
+ * Where the funnel loses people, how much of the total loss that one step is,
+ * and whether it is moving.
+ *
+ * The rules, so the sentence is never a guess (METRICAS.md §7 ter):
+ *  · the worst step is the mature stage with the highest drop against the
+ *    stage before it, the purchase-to-first-session one included;
+ *  · its weight is its own losses over everything lost up to the sixth session;
+ *  · it is improving or worsening when its drop moved at least a point against
+ *    the previous period, and stable inside that.
+ */
+function lecturaDe(filas: FilaEtapa[]): string | null {
+  const conCaida = filas.filter(
+    (f): f is FilaEtapa & { caida: number; cayeron: number } =>
+      f.caida !== null && f.cayeron !== null,
+  );
+  if (conCaida.length === 0) return null;
+
+  const peor = conCaida.reduce((a, b) => (b.caida > a.caida ? b : a));
+  const perdidoTotal = conCaida.reduce((a, f) => a + f.cayeron, 0);
   const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
-  const base = `El salto más caro es de la ${peor.paso}ª a la ${peor.paso + 1}ª sesión: se pierde ${pct(peor.valor)} en promedio.`;
 
-  if (serie.length < 4) return base;
+  const tramo =
+    peor.nro === 1
+      ? "entre la compra y la primera sesión"
+      : `entre la ${peor.nro - 1}ª sesión y la ${peor.nro}ª`;
 
-  // The grid is newest first, so the head is recent and the tail is older.
-  const recientes = serie.slice(0, 3);
-  const previas = serie.slice(3, 6);
-  const media = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-  const delta = media(recientes) - media(previas);
+  const peso =
+    perdidoTotal > 0
+      ? ` Ahí se va ${pct(peor.cayeron / perdidoTotal)} de todo lo que se pierde hasta la 6ª sesión.`
+      : "";
 
-  if (Math.abs(delta) < 0.02) return `${base} Estable entre cohortes.`;
-  return delta < 0
-    ? `${base} Viene mejorando: ${pct(Math.abs(delta))} menos de caída que en las cohortes anteriores.`
-    : `${base} Viene empeorando: ${pct(delta)} más de caída que en las cohortes anteriores.`;
+  const base = `La pérdida más grande está ${tramo}: cae ${pct(peor.caida)} de los ${peor.n} compradores que llegaron a esa altura.${peso}`;
+
+  if (peor.deltaPp === null) return base;
+  if (Math.abs(peor.deltaPp) < 0.01) {
+    return `${base} Igual que en el período anterior.`;
+  }
+  return peor.deltaPp < 0
+    ? `${base} Viene mejorando: ${(Math.abs(peor.deltaPp) * 100).toFixed(1)} puntos menos de caída que en el período anterior.`
+    : `${base} Viene empeorando: ${(peor.deltaPp * 100).toFixed(1)} puntos más de caída que en el período anterior.`;
+}
+
+function delta(ahora: number, antes: number): number | null {
+  if (antes === 0) return null;
+  return ahora / antes - 1;
+}
+
+/** Today as a local calendar day (UTC−3), which is how every day is cut. */
+function diaLocal(ahora: Date): string {
+  return new Date(ahora.getTime() - LOCAL_UTC_OFFSET_HOURS * 3_600_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function sumarDias(fecha: string, dias: number): string {
+  const t = Date.parse(`${fecha}T00:00:00Z`) + dias * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+function minimo(a: string, b: string): string {
+  return a < b ? a : b;
 }

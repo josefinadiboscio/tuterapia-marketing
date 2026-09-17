@@ -4,6 +4,7 @@ import { withDb } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/auth";
 import { sincronizarMes, mesesAEscribir } from "@/lib/sync";
 import { sincronizarDias, DIAS_A_SINCRONIZAR } from "@/lib/sync-diario";
+import { sincronizarFunnel } from "@/lib/sync-funnel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,8 +18,10 @@ export const maxDuration = 60;
  * month is never recalculated by the cron. A backfill is an explicit command,
  * ?meses=2026-07,2026-06, not a side effect of the schedule.
  *
- * The daily grain for Movimientos is written in the same run, over the last 45
- * days, so both tables always describe the same moment.
+ * The daily grain is written in the same run, over the last 45 days, so both
+ * tables always describe the same moment. The funnel over buyers is rebuilt in
+ * the same run too, over a much longer window and for a different reason: a
+ * past cohort's future changes every night.
  *
  * Every run writes to marketing.sync_log, success or failure. Without that, a
  * dead cron goes unnoticed for weeks.
@@ -53,6 +56,10 @@ export async function GET(request: Request) {
         // and the daily window is always the last 45 days.
         if (!pedido) {
           filas += await sincronizarDias(mysql, db, DIAS_A_SINCRONIZAR);
+          // The funnel is the exception to "never recalculate a closed
+          // month": a cohort of buyers keeps moving, so its whole window is
+          // rebuilt every night. See lib/sync-funnel.ts.
+          filas += await sincronizarFunnel(mysql, db);
         }
         await registrar(db, meses, filas, Date.now() - startedAt, null);
       });

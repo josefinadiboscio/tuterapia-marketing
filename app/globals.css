@@ -20,6 +20,9 @@
   --gold: #f5d28b;
   --coral: #e5705a;
   --green: #6baf7a;
+  /* Un delta que empeora no es una alarma: es ámbar, no coral. El coral queda
+     para la pérdida en sí. */
+  --ambar: #e8a33f;
 
   /* Oscuro, el modo por defecto: verde muy oscuro, casi negro. */
   --bg: #0c1410;
@@ -91,6 +94,7 @@
   --color-gold: var(--gold);
   --color-coral: var(--coral);
   --color-green: var(--green);
+  --color-ambar: var(--ambar);
 
   --color-acento: var(--orange);
   --color-e0: var(--e0);

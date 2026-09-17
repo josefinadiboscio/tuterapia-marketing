@@ -29,29 +29,42 @@ export async function sincronizarFunnel(
   mysql: Connection,
   db: Client,
   dias = DIAS_DE_FUNNEL,
+  offset = 0,
   ahora = new Date(),
 ): Promise<number> {
   const desde = diaLocalMenos(dias, ahora);
+  // An offset rebuilds an older slice and leaves the recent days alone, so a
+  // window too long for one invocation can be done in two.
+  const hasta = diaLocalMenos(offset, ahora);
   // MySQL filters on the UTC instant, and the local day starts three hours
   // later in UTC. Whoever bought at 22:00 local on the first day of the
   // window is in it.
   const desdeUtc = `${desde} ${String(LOCAL_UTC_OFFSET_HOURS).padStart(2, "0")}:00:00`;
 
-  const [etapas, tiempos] = await Promise.all([
+  const [todasEtapas, todosTiempos] = await Promise.all([
     etapasPorDiaDeCompra(mysql, desdeUtc),
     tiemposPorDiaDeCompra(mysql, desdeUtc),
   ]);
+
+  // MySQL filters from the start of the window; the end is cut here so an
+  // offset run cannot touch a day it was told to leave alone.
+  const etapas = todasEtapas.filter((f) => f.fecha <= hasta);
+  const tiempos = todosTiempos.filter((f) => f.fecha <= hasta);
 
   return transaction(db, async () => {
     // Replace rather than upsert: a patient can only ever move forward, but a
     // stage row that was written once and is no longer produced — a refund
     // that unconfirmed a payment — would otherwise stay there for good.
-    await db.query("delete from marketing.funnel_etapas where fecha_compra >= $1", [
-      desde,
-    ]);
-    await db.query("delete from marketing.funnel_tiempos where fecha_compra >= $1", [
-      desde,
-    ]);
+    await db.query(
+      `delete from marketing.funnel_etapas
+        where fecha_compra >= $1 and fecha_compra <= $2`,
+      [desde, hasta],
+    );
+    await db.query(
+      `delete from marketing.funnel_tiempos
+        where fecha_compra >= $1 and fecha_compra <= $2`,
+      [desde, hasta],
+    );
 
     await insertarEtapas(db, etapas);
     await insertarTiempos(db, tiempos);

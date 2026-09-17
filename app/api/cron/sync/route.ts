@@ -4,7 +4,6 @@ import { withDb } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/auth";
 import { sincronizarMes, mesesAEscribir } from "@/lib/sync";
 import { sincronizarDias, DIAS_A_SINCRONIZAR } from "@/lib/sync-diario";
-import { sincronizarFunnel } from "@/lib/sync-funnel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +18,11 @@ export const maxDuration = 60;
  * ?meses=2026-07,2026-06, not a side effect of the schedule.
  *
  * The daily grain is written in the same run, over the last 45 days, so both
- * tables always describe the same moment. The funnel over buyers is rebuilt in
- * the same run too, over a much longer window and for a different reason: a
- * past cohort's future changes every night.
+ * tables always describe the same moment.
+ *
+ * The funnel over buyers is NOT written here: it rebuilds a two-year window
+ * and this run already uses 55 of its 60 seconds. It has its own endpoint and
+ * its own schedule, /api/cron/funnel.
  *
  * Every run writes to marketing.sync_log, success or failure. Without that, a
  * dead cron goes unnoticed for weeks.
@@ -56,10 +57,6 @@ export async function GET(request: Request) {
         // and the daily window is always the last 45 days.
         if (!pedido) {
           filas += await sincronizarDias(mysql, db, DIAS_A_SINCRONIZAR);
-          // The funnel is the exception to "never recalculate a closed
-          // month": a cohort of buyers keeps moving, so its whole window is
-          // rebuilt every night. See lib/sync-funnel.ts.
-          filas += await sincronizarFunnel(mysql, db);
         }
         await registrar(db, meses, filas, Date.now() - startedAt, null);
       });

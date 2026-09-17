@@ -203,10 +203,26 @@ async function diagnosticarNoShow(pais: string, desde: string, corte: string) {
               SUM(${diaSesion} = ${diaPago}) AS sesion_el_mismo_dia,
               SUM(${diaSesion} > ${diaPago}) AS sesion_despues_de_pagar,
               SUM(${diaSesion} < ${diaPago}
-                  AND DATEDIFF(${diaPago}, ${diaSesion}) > 30) AS sesion_mas_de_30_dias_antes
+                  AND DATEDIFF(${diaPago}, ${diaSesion}) > 30) AS sesion_mas_de_30_dias_antes,
+              -- Of those with no realized session: did they book one at all?
+              -- "Never booked" and "booked and never held" are different
+              -- problems, and the 5% hides both.
+              SUM(ps.primera IS NULL AND ag.agendadas > 0) AS sin_sesion_pero_agendaron,
+              SUM(ps.primera IS NULL AND COALESCE(ag.agendadas, 0) = 0)
+                AS sin_sesion_y_sin_agendar,
+              -- Sanity check on the flag itself: if nothing is ever 0, then
+              -- realizada does not discriminate and the whole funnel is wrong.
+              SUM(COALESCE(ag.agendadas, 0)) AS sesiones_agendadas_sin_realizar,
+              SUM(COALESCE(re.realizadas, 0)) AS sesiones_realizadas
          FROM login l
          JOIN (${PRIMER_PAGO}) p ON p.id_paciente = l.id
          LEFT JOIN (${PRIMERA_SESION}) ps ON ps.id_paciente = l.id
+         LEFT JOIN (SELECT id_paciente, COUNT(*) AS agendadas
+                      FROM sesiones WHERE realizada = 0
+                     GROUP BY id_paciente) ag ON ag.id_paciente = l.id
+         LEFT JOIN (SELECT id_paciente, COUNT(*) AS realizadas
+                      FROM sesiones WHERE realizada = 1
+                     GROUP BY id_paciente) re ON re.id_paciente = l.id
         WHERE l.tipo = 1 AND l.paisDominio = ?
           AND ${diaPago} >= ? AND ${diaPago} <= ?`,
       [pais, desde, corte],
@@ -224,6 +240,10 @@ async function diagnosticarNoShow(pais: string, desde: string, corte: string) {
       sesion_el_mismo_dia: n("sesion_el_mismo_dia"),
       sesion_despues_de_pagar: n("sesion_despues_de_pagar"),
       sesion_mas_de_30_dias_antes: n("sesion_mas_de_30_dias_antes"),
+      sin_sesion_pero_agendaron: n("sin_sesion_pero_agendaron"),
+      sin_sesion_y_sin_agendar: n("sin_sesion_y_sin_agendar"),
+      sesiones_agendadas_sin_realizar: n("sesiones_agendadas_sin_realizar"),
+      sesiones_realizadas: n("sesiones_realizadas"),
       // What the drop would be if only a session AFTER the purchase counted.
       caida_si_solo_cuenta_despues:
         compradores === 0

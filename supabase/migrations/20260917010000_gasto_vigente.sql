@@ -26,4 +26,7 @@ values
   ('UY', 'Google Ads',  16, '2026-09-17'),
   ('AR', 'TikTok',      20, '2026-09-17'),
   ('AR', 'Meta',       250, '2026-09-17'),
-  ('UY', 'Meta',       125, '2026-09-17');
+  ('UY', 'Meta',       125, '2026-09-17'),
+  -- Cero declarado, no dato faltante: TikTok Uruguay se dejó de pautar.
+  -- Vacío y cero se leen igual en la pantalla, y no son lo mismo.
+  ('UY', 'TikTok',       0, '2026-09-17');

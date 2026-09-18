@@ -1,18 +1,33 @@
 import Link from "next/link";
 import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
 import { TablaEtapas } from "@/components/tabla-etapas";
-import { TablaTiempos } from "@/components/tabla-tiempos";
+import { Embudo } from "@/components/embudo";
+import { DondeSePierde } from "@/components/donde-se-pierde";
+import { GrillaCohortes } from "@/components/grilla-cohortes";
+import { SelectorCohorte } from "@/components/selector-cohorte";
 import { leerFunnel, PERIODOS, type Periodo } from "@/lib/funnel";
+import {
+  leerCohortes,
+  PROFUNDIDADES,
+  type Profundidad,
+} from "@/lib/funnel-cohorte";
+import { withDb } from "@/lib/db";
+import { usuarioActual } from "@/lib/supabase/servidor";
 import { entero, porcentaje, delta as fmtDelta } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The funnel over buyers.
+ * El funnel, en dos lecturas que no se pisan.
  *
- * Two filters and two tables: how many of the people who bought in the period
- * kept sitting down, and how long each step takes. Nothing here is a monthly
- * total; every row is the same group of people followed forward.
+ * Arriba, sobre una ventana móvil de 90/180/365 días: cuánta gente compró y
+ * dónde termina la terapia. Es la foto del momento y sirve para comparar
+ * contra el período anterior.
+ *
+ * Abajo, por cohorte: un mes de compradores seguido hacia adelante. Es la
+ * misma gente medida con un solo denominador y una sola edad, que es lo único
+ * que permite comparar un mes contra otro sin que la diferencia sea el
+ * calendario.
  */
 export default async function Funnel({
   searchParams,
@@ -22,12 +37,24 @@ export default async function Funnel({
   const params = await searchParams;
   const ctx = await contexto(params);
   const periodo = leerPeriodo(params.periodo);
-  const vista = await leerFunnel(ctx.pais, periodo);
+  const profundidad = leerProfundidad(params.profundidad);
+
+  const [vista, cohortes, puedeExportar] = await Promise.all([
+    leerFunnel(ctx.pais, periodo),
+    leerCohortes(ctx.pais, profundidad, params.cohorte),
+    permisoDeExportar(),
+  ]);
+
+  const extra = {
+    periodo: String(periodo),
+    profundidad: String(profundidad),
+    ...(params.cohorte ? { cohorte: params.cohorte } : {}),
+  };
 
   return (
     <>
       <Nav activa="/funnel" ctx={ctx} />
-      <Selectores activa="/funnel" ctx={ctx} extra={{ periodo: String(periodo) }} />
+      <Selectores activa="/funnel" ctx={ctx} extra={extra} />
 
       <main className="contenedor pb-10 pt-6">
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -35,7 +62,7 @@ export default async function Funnel({
           {PERIODOS.map((p) => (
             <Link
               key={p}
-              href={conContexto("/funnel", ctx, { periodo: String(p) })}
+              href={conContexto("/funnel", ctx, { ...extra, periodo: String(p) })}
               className={`rounded-md border px-2 py-1 ${
                 p === periodo
                   ? "border-orange bg-orange text-bg"
@@ -91,10 +118,6 @@ export default async function Funnel({
                     </span>
                   )}
                 </p>
-                {/* The one card allowed a line under the number: without the
-                    base and the cut-off date the percentage is unreadable.
-                    It is the first-session row of the table, not a second
-                    count of the same thing — same base, same cut. */}
                 <p className="mt-0.5 text-[11px] text-ter">
                   sobre {entero(vista.noVuelven.base)} compradores, hasta compras
                   del {vista.noVuelven.hasta}
@@ -113,57 +136,76 @@ export default async function Funnel({
           </div>
         </section>
 
+        {cohortes.elegida === null ? null : (
+          <section className="mt-9">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xs uppercase tracking-wide text-ter">
+                Cohorte
+              </h2>
+              <SelectorCohorte
+                opciones={cohortes.meses.map((m) => ({
+                  mes: m,
+                  href: conContexto("/funnel", ctx, { ...extra, cohorte: m }),
+                }))}
+                elegida={cohortes.elegida.mes}
+              />
+              <span className="text-[11px] text-ter">
+                {entero(cohortes.elegida.n)} compradores ·{" "}
+                {cohortes.elegida.diasMadurez} días de madurez
+              </span>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start">
+              <Embudo cohorte={cohortes.elegida} />
+              <DondeSePierde cohorte={cohortes.elegida} />
+            </div>
+          </section>
+        )}
+
         <section className="mt-9">
           <h2 className="text-xs uppercase tracking-wide text-ter">
-            Tiempo entre sesiones
+            Caída por cohorte
           </h2>
           <div className="mt-3">
-            <TablaTiempos filas={vista.tiempos} />
+            <GrillaCohortes
+              grilla={cohortes.grilla}
+              profundidad={profundidad}
+              cohorteElegida={cohortes.elegida?.mes ?? null}
+              pais={ctx.pais}
+              puedeExportar={puedeExportar}
+              hrefProfundidad={(p) =>
+                conContexto("/funnel", ctx, { ...extra, profundidad: String(p) })
+              }
+              hrefCohorte={(mes) =>
+                conContexto("/funnel", ctx, { ...extra, cohorte: mes })
+              }
+            />
           </div>
         </section>
-
-        {vista.lectura ? (
-          <p className="mt-6 border-l-2 border-gold bg-warn-bg px-3 py-2 text-sm">
-            {vista.lectura}
-          </p>
-        ) : null}
-
-        {/* The nominal export is per registration cohort, which is a month and
-            not this period, so it carries its own selector. */}
-        {vista.meses.length > 0 ? (
-          <form
-            action="/api/funnel/csv"
-            method="get"
-            className="mt-9 flex flex-wrap items-center gap-2 text-xs"
-          >
-            <input type="hidden" name="pais" value={ctx.pais} />
-            <input type="hidden" name="nominal" value="1" />
-            <span className="text-ter">Descargar cohorte</span>
-            <select
-              name="mes"
-              defaultValue={vista.meses[0]}
-              className="rounded-md border border-borde bg-surface px-2 py-1 text-texto"
-            >
-              {vista.meses.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="rounded-md border border-borde px-2.5 py-1 text-sec hover:border-sec hover:text-texto"
-            >
-              CSV con nombre y mail
-            </button>
-          </form>
-        ) : null}
       </main>
     </>
   );
 }
 
+/** Si la cuenta puede bajar datos personales. Sin permiso, la celda no baja. */
+async function permisoDeExportar(): Promise<boolean> {
+  const usuario = await usuarioActual();
+  if (!usuario) return false;
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ export_pii: boolean }>(
+      `select export_pii from marketing.permisos where usuario_id = $1`,
+      [usuario.id],
+    );
+    return rows[0]?.export_pii === true;
+  });
+}
+
 function leerPeriodo(valor: string | undefined): Periodo {
   const n = Number(valor);
   return PERIODOS.includes(n as Periodo) ? (n as Periodo) : 90;
+}
+
+function leerProfundidad(valor: string | undefined): Profundidad {
+  const n = Number(valor);
+  return PROFUNDIDADES.includes(n as Profundidad) ? (n as Profundidad) : 12;
 }

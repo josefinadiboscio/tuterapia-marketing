@@ -61,20 +61,21 @@
  * está parada cada etapa sin que haya que leer la etiqueta.
  *
  * Son los mismos hex en los dos modos: son identidad de etapa, no estado.
+ *
+ * Siete, una por etapa dibujada. La tabla guarda doce sesiones pero la
+ * pantalla llega hasta la sexta, y una rampa con colores que nadie usa es una
+ * rampa que se desalinea con las etiquetas la próxima vez que alguien la toca.
+ * Los tres lugares que las pintan —la tabla, el embudo y la grilla— leen esta
+ * misma rampa: una etapa, un color.
  */
 :root {
   --e0: #e8833f;
-  --e1: #f0a05c;
+  --e1: #f5b584;
   --e2: #f5d28b;
   --e3: #7fbfbf;
   --e4: #4a9b9b;
-  --e5: #3f8a8a;
-  --e6: #3a7d7d;
-  --e7: #357070;
-  --e8: #2f6565;
-  --e9: #2c5f5f;
-  --e10: #285555;
-  --e11: #244b4b;
+  --e5: #3a7d7d;
+  --e6: #2c5f5f;
 }
 
 @theme inline {
@@ -104,11 +105,6 @@
   --color-e4: var(--e4);
   --color-e5: var(--e5);
   --color-e6: var(--e6);
-  --color-e7: var(--e7);
-  --color-e8: var(--e8);
-  --color-e9: var(--e9);
-  --color-e10: var(--e10);
-  --color-e11: var(--e11);
   --color-warn: var(--warn);
   --color-warn-bg: var(--warn-bg);
   --color-danger: var(--danger);

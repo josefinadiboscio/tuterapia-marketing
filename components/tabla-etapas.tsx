@@ -21,7 +21,7 @@ import type { FilaEtapa } from "@/lib/funnel";
  * The ramp runs orange to deep teal so the colour says which half of the
  * funnel a stage belongs to — buying or staying — without reading the label.
  */
-const COLOR = ["bg-e0", "bg-e2", "bg-e3", "bg-e4", "bg-e5", "bg-e6", "bg-e7"];
+const COLOR = ["bg-e0", "bg-e1", "bg-e2", "bg-e3", "bg-e4", "bg-e5", "bg-e6"];
 
 export function TablaEtapas({ filas }: { filas: FilaEtapa[] }) {
   const base = filas[0]?.llegaron ?? 0;

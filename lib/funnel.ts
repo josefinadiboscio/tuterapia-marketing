@@ -87,16 +87,6 @@ export type FilaEtapa = {
   corte: string | null;
 };
 
-export type FilaTiempo = {
-  tramo: number;
-  etiqueta: string;
-  mediana: number | null;
-  p80: number | null;
-  /** Change of the median against the previous period, in days. */
-  deltaDias: number | null;
-  n: number | null;
-};
-
 export type NoVuelven = {
   personas: number;
   pct: number;
@@ -115,13 +105,9 @@ export type VistaFunnel = {
   deltaCompradores: number | null;
   noVuelven: NoVuelven | null;
   etapas: FilaEtapa[];
-  tiempos: FilaTiempo[];
-  lectura: string | null;
-  /** Cohort months, for the nominal download. */
-  meses: string[];
 };
 
-const ETIQUETA_ETAPA = [
+export const ETIQUETA_ETAPA = [
   "Compraron",
   "1ª sesión",
   "2ª sesión",
@@ -131,7 +117,7 @@ const ETIQUETA_ETAPA = [
   "6ª sesión",
 ];
 
-const ETIQUETA_TRAMO = [
+export const ETIQUETA_TRAMO = [
   "Compra → 1ª",
   "1ª → 2ª",
   "2ª → 3ª",
@@ -161,18 +147,10 @@ export async function leerFunnel(
   const cortesPrevios = cortes.map(() => previo.hasta);
 
   return withDb(async (db) => {
-    const [actual, anterior, tiempos, tiemposPrevios, meses] =
-      await Promise.all([
-        etapas(db, paises, desde, cortes),
-        etapas(db, paises, previo.desde, cortesPrevios),
-        histograma(db, paises, desde, cortes),
-        histograma(db, paises, previo.desde, cortesPrevios),
-        db.query<{ mes: string }>(
-          `select distinct to_char(mes, 'YYYY-MM') as mes
-             from marketing.metricas_mensuales
-            where es_provisorio = false order by mes desc limit 12`,
-        ),
-      ]);
+    const [actual, anterior] = await Promise.all([
+      etapas(db, paises, desde, cortes),
+      etapas(db, paises, previo.desde, cortesPrevios),
+    ]);
 
     const filas = armarEtapas(actual, anterior, cortes);
 
@@ -203,9 +181,6 @@ export async function leerFunnel(
       ),
       noVuelven,
       etapas: filas,
-      tiempos: armarTiempos(tiempos, tiemposPrevios),
-      lectura: lecturaDe(filas),
-      meses: meses.rows.map((m) => m.mes),
     };
   });
 }
@@ -318,129 +293,6 @@ function armarEtapas(
       corte: cortes[nro] ?? null,
     };
   });
-}
-
-/** The day histogram of every trip, each one inside its own maturity cut. */
-async function histograma(
-  db: import("pg").Client,
-  paises: string[],
-  desde: string,
-  cortes: string[],
-): Promise<Map<number, { dias: number; n: number }[]>> {
-  // Trip t is complete when session t+1 happens, so it matures with that stage.
-  const tramos = ETIQUETA_TRAMO.map((_, t) => t);
-  const { rows } = await db.query<{ tramo: number; dias: number; n: string }>(
-    `with tramo as (
-       select tramo, corte from unnest($3::int[], $4::date[]) as t(tramo, corte)
-     )
-     select t.tramo, f.dias, sum(f.pacientes)::text as n
-       from tramo t
-       join marketing.funnel_tiempos f
-              on f.tramo = t.tramo
-             and f.pais = any($1)
-             and f.fecha_compra >= $2
-             and f.fecha_compra <= t.corte
-      group by t.tramo, f.dias
-      order by t.tramo, f.dias`,
-    [paises, desde, tramos, tramos.map((t) => cortes[t + 1] ?? cortes.at(-1)!)],
-  );
-
-  const salida = new Map<number, { dias: number; n: number }[]>();
-  for (const r of rows) {
-    const lista = salida.get(Number(r.tramo)) ?? [];
-    lista.push({ dias: Number(r.dias), n: Number(r.n) });
-    salida.set(Number(r.tramo), lista);
-  }
-  return salida;
-}
-
-function armarTiempos(
-  actual: Map<number, { dias: number; n: number }[]>,
-  anterior: Map<number, { dias: number; n: number }[]>,
-): FilaTiempo[] {
-  return ETIQUETA_TRAMO.map((etiqueta, tramo) => {
-    const h = actual.get(tramo) ?? [];
-    const total = h.reduce((a, x) => a + x.n, 0);
-    const mediana = percentil(h, 0.5);
-    const medianaPrevia = percentil(anterior.get(tramo) ?? [], 0.5);
-
-    return {
-      tramo,
-      etiqueta,
-      mediana,
-      p80: percentil(h, 0.8),
-      deltaDias:
-        mediana === null || medianaPrevia === null ? null : mediana - medianaPrevia,
-      n: total === 0 ? null : total,
-    };
-  });
-}
-
-/**
- * Nearest-rank percentile over a histogram: the first day value at which the
- * running count reaches the share asked for.
- *
- * No interpolation. The values are whole days and a median of 4,5 days would
- * be a number nobody can act on.
- */
-function percentil(
-  histograma: { dias: number; n: number }[],
-  parte: number,
-): number | null {
-  const total = histograma.reduce((a, x) => a + x.n, 0);
-  if (total === 0) return null;
-
-  const objetivo = Math.ceil(total * parte);
-  let acumulado = 0;
-  for (const { dias, n } of [...histograma].sort((a, b) => a.dias - b.dias)) {
-    acumulado += n;
-    if (acumulado >= objetivo) return dias;
-  }
-  return null;
-}
-
-/**
- * Where therapy ends, how much of the total loss that is, and whether it is
- * moving. Same criterion as the table: people AT a stage, not steps into it.
- *
- * The rules, so the sentence is never a guess (METRICAS.md §6 bis):
- *  · the worst stage is the mature one where the most people ENDED, counted in
- *    people and not as a rate, so a tiny stage with a high rate cannot win;
- *  · its weight is its own leavers over everyone who left up to the sixth
- *    session;
- *  · it improves or worsens when its share moved at least a point against the
- *    previous period, and is stable inside that.
- */
-function lecturaDe(filas: FilaEtapa[]): string | null {
-  const conQuedados = filas.filter(
-    (f): f is FilaEtapa & { seQuedaron: number; pctSeQuedaron: number } =>
-      f.seQuedaron !== null && f.pctSeQuedaron !== null,
-  );
-  if (conQuedados.length === 0) return null;
-
-  const peor = conQuedados.reduce((a, b) => (b.seQuedaron > a.seQuedaron ? b : a));
-  const perdidoTotal = conQuedados.reduce((a, f) => a + f.seQuedaron, 0);
-  const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
-
-  const donde =
-    peor.nro === 0
-      ? "La mayoría de lo que se pierde es gente que pagó y no se sentó nunca"
-      : `La terapia termina más que en ninguna otra parte en la ${peor.nro}ª sesión`;
-
-  const peso =
-    perdidoTotal > 0
-      ? ` Es ${pct(peor.seQuedaron / perdidoTotal)} de todo lo que se pierde hasta la 6ª sesión.`
-      : "";
-
-  const base = `${donde}: ${peor.seQuedaron} personas, ${pct(peor.pctSeQuedaron)} de los compradores, no pasaron de ahí.${peso}`;
-
-  if (peor.deltaPp === null) return base;
-  if (Math.abs(peor.deltaPp) < 0.01) {
-    return `${base} Igual que en el período anterior.`;
-  }
-  return peor.deltaPp < 0
-    ? `${base} Viene mejorando: ${(Math.abs(peor.deltaPp) * 100).toFixed(1)} puntos menos que en el período anterior.`
-    : `${base} Viene empeorando: ${(peor.deltaPp * 100).toFixed(1)} puntos más que en el período anterior.`;
 }
 
 function delta(ahora: number, antes: number): number | null {

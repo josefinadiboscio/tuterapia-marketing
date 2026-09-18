@@ -82,12 +82,24 @@ job como la web. **Nunca duplicar un cálculo entre las dos.**
 - Las pantallas y los agregados son anónimos. Ninguna tabla de Supabase guarda
   `nombre`, `apellido`, `telefono`, `email` ni `fecha_nacimiento`, y ninguna
   query del job los lee. El dashboard no necesita identificar a nadie.
-- **Única excepción: la exportación nominal de cohorte** (`/api/funnel/csv`
-  con `?nominal=1`), pedida explícitamente por el dueño del producto el
-  2026-09-16. Lee `nombre` y `email` de MySQL **en el momento de la descarga**
-  y no los persiste: no pasan por Supabase, no quedan en un agregado, no los
-  toca el cron. Si hiciera falta otro dato personal, se agrega acá o no se
-  agrega.
+- **Única excepción: la exportación de caída por cohorte**
+  (`/api/funnel/csv?cohorte=YYYY-MM&tramo=N`), pedida explícitamente por el
+  dueño del producto el 2026-09-16 y ampliada a la grilla el 2026-09-18. Lee
+  `nombre` y `email` de MySQL **en el momento de la descarga** y no los
+  persiste: no pasan por Supabase, no quedan en un agregado, no los toca el
+  cron. Si hiciera falta otro dato personal, se agrega acá o no se agrega.
+- Exporta exactamente cinco columnas y ninguna más: `email`, `nombre`,
+  `fecha_registro`, `pais`, `utm_source`. La primera línea del archivo es un
+  aviso de que son datos de pacientes en tratamiento y su distribución está
+  restringida.
+- Tres condiciones, las tres obligatorias, porque la grilla dejó la descarga a
+  un clic de distancia y eso la volvió fácil de hacer sin pensarla:
+  1. sesión válida (la cubre el middleware);
+  2. `export_pii = true` en `marketing.permisos`, que es un permiso distinto
+     del de leer el dashboard — sin él la celda muestra el número y no baja
+     nada;
+  3. una fila en `marketing.export_log` **antes** de mandar el archivo. Si esa
+     escritura falla, la descarga no sale.
 - Esa ruta es la única que consulta MySQL en vivo. Guardar los datos personales
   en Supabase sería peor: dejaría una segunda copia permanente de un padrón de
   pacientes en tratamiento, sincronizada todas las noches.

@@ -518,6 +518,12 @@ nunca se sientan, que es el escalón *compra → 1ª* de la tabla.
 
 ### Tiempo entre sesiones
 
+**Ya no se muestra en pantalla** (2026-09-18): la tabla de tiempos salió del
+Funnel junto con la lectura automática. La tabla `marketing.funnel_tiempos` se
+sigue sincronizando igual, porque de ahí salen los p80 medidos que calibran las
+constantes de madurez de §6 bis — si se dejara de llenar, los cortes de cada
+etapa quedarían sin fundamento medible.
+
 Tramos: compra → 1ª, y 1ª → 2ª hasta 5ª → 6ª. Mediana y p80 en días locales
 (UTC−3), nunca UTC. Un tramo madura con la etapa a la que llega, así que usa el
 mismo corte que ella.
@@ -533,7 +539,10 @@ antes del pago, y una espera no puede ser menos que nada.
 
 ### Lectura automática
 
-Tres reglas, y ninguna es una opinión:
+**Retirada el 2026-09-18.** La reemplazó el panel "Dónde se pierde" de §6 ter,
+que dice lo mismo sin redactarlo: los tramos ordenados por gente perdida y el
+peso del peor sobre el total. Las reglas quedan acá por si alguna vez se
+vuelve, y porque el panel las respeta:
 
 1. **La etapa más cara** es la etapa madura donde terminó **más gente**,
    contada en personas y no en porcentaje, así una etapa chica con una tasa
@@ -598,6 +607,79 @@ No vuelven tras la 1ª, mismo corte: **333 personas, 34,8%**, sobre 956
 compradores con 1ª sesión, hasta compras del 2026-08-18.
 
 ---
+
+## 6 ter. Funnel por cohorte
+
+Es la otra mitad de §6 bis, no un reemplazo, y la diferencia importa.
+
+§6 bis mira una **ventana móvil** de 90, 180 o 365 días. Adentro de esa ventana
+conviven el que compró ayer y el que compró hace un año, así que cada etapa
+tiene que cortarse en su propia madurez y cada porcentaje lleva su propio
+denominador. Es la foto del momento, y sirve para comparar contra el período
+anterior.
+
+§6 ter mira una **cohorte**: un mes de compradores seguido hacia adelante.
+Todos compraron el mismo mes, la cohorte entera tiene una sola edad, y entonces
+los siete porcentajes se leen contra un único denominador —los compradores del
+mes— sin más aclaraciones. Es lo único que permite comparar un mes contra otro
+sin que la diferencia sea el calendario.
+
+**No hay rango libre de fechas en esta vista.** Un rango arbitrario mezcla
+gente con distinta madurez y produce una caída que es en parte el almanaque.
+
+### Edad de la cohorte
+
+Se mide desde el **último comprador del mes**, no desde el primero ni desde el
+fin del mes calendario: es el más joven el que decide si la cohorte ya puede
+contestar una pregunta. La cohorte responde por la etapa `k` cuando su edad
+llega a `madurez(k)` de §6 bis, y hasta entonces esa etapa va vacía con los
+días que faltan. Nunca un porcentaje sobre pocos casos.
+
+Con `madurez(6) = 55`, una cohorte necesita unos dos meses cerrados para
+dibujar el embudo entero. Por eso el mes que se abre por defecto es **la
+cohorte más nueva con madurez completa**, y no el mes en curso: abrir en el mes
+en curso mostraría un embudo casi todo vacío.
+
+### Caída de un tramo
+
+`perdidos[t] = llegaron[t] − llegaron[t+1]`, y el porcentaje es sobre
+`llegaron[t]`. Como `llegaron[k]` es "hizo k sesiones o más", la resta da
+exactamente los que hicieron **exactamente** `t` sesiones — que es la misma
+definición que usa la exportación del CSV para elegir a quién bajar. Si esos
+dos números alguna vez no coinciden, uno de los dos está mal.
+
+Un tramo madura con su **etapa de destino**: saber cuántos no pasaron a la
+siguiente exige que la siguiente ya haya tenido tiempo de pasar.
+
+### Dónde se pierde
+
+Los tramos se ordenan por **gente perdida**, no por porcentaje, y el primero
+lleva qué parte del total perdido se lleva. La diferencia es entre "el tramo
+1ª→2ª pierde 34%" y "se lleva 127 personas, la mitad de todo lo que perdés":
+lo segundo es lo que dice dónde trabajar. Un tramo tardío puede tener la peor
+tasa y mover veinte personas, porque a esa altura ya queda poca gente.
+
+La barra de cada tramo es relativa al **peor tramo**, no al total: contra el
+total todas quedarían cortas y parecidas.
+
+### Verificado contra la base el 2026-09-18
+
+AR, cohorte 2026-06, 384 compradores, 80 días de madurez:
+
+| Etapa | Llegaron | % del total | Caída del tramo |
+|---|---:|---:|---|
+| Compraron | 384 | 100% | |
+| 1ª sesión | 372 | 97% | −12 · 3% |
+| 2ª sesión | 245 | 64% | −127 · 34% |
+| 3ª sesión | 198 | 52% | −47 · 19% |
+| 4ª sesión | 175 | 46% | −23 · 12% |
+| 5ª sesión | 152 | 40% | −23 · 13% |
+| 6ª sesión | 133 | 35% | −19 · 13% |
+
+Se pierden 251 personas hasta la 6ª. El tramo 1ª→2ª se lleva 127, el **51%**
+de todo. Es el mismo hallazgo que §6 bis cuenta como "la terapia termina más
+que en ninguna otra parte en la 1ª sesión", visto por cohorte en vez de por
+ventana.
 
 ## 7. UTMs
 
@@ -773,6 +855,21 @@ correr dos veces.
 Cada corrida escribe también en `marketing.sync_log` (timestamp, filas,
 error). El dashboard muestra la última sincronización en el header. Sin eso,
 un cron caído pasa desapercibido durante semanas.
+
+### `marketing.permisos` y `marketing.export_log`
+
+No son agregados: son el control de la única exportación que toca datos
+personales (CLAUDE.md).
+
+`permisos` tiene una fila por cuenta habilitada a exportar. Tener cuenta
+alcanza para ver todos los números del dashboard; no alcanza para bajarse
+nombres y mails. Sin fila, o con `export_pii = false`, la celda de la grilla
+muestra el número y no descarga.
+
+`export_log` se escribe **antes** de mandar cada archivo: usuario, mail,
+cohorte, tramo, país, filas y timestamp. Si esa escritura falla, la descarga no
+sale. Una exportación sin registro es exactamente la situación que había con la
+contraseña compartida.
 
 ### Las tablas del Funnel son la excepción a "nunca recalcular un mes cerrado"
 

@@ -25,7 +25,7 @@ export default async function Admin({
       <Nav activa="/admin" ctx={ctx} />
       <Selectores activa="/admin" ctx={ctx} />
 
-      <main className="mx-auto max-w-5xl space-y-10 px-6 py-8">
+      <main className="contenedor space-y-10 py-8">
         {/* Alerts first: they are the reason to open this screen. */}
         {(admin.faltantes.length > 0 || admin.sinMapear.length > 0) && (
           <section className="space-y-3">

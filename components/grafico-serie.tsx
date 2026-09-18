@@ -101,12 +101,12 @@ export function GraficoSerie({
   const referencias = escalaY(maximo);
   const tope = referencias[referencias.length - 1]!;
 
-  // The plot is 150 tall plus a 28px label row, and the viewBox width matches
-  // the container so the whole thing lands near 1:1 and stays under 200px.
-  // Before, the aspect ratio let the chart grow with the width and push
-  // Economía off the screen.
-  const ancho = 1100;
-  const alto = 150;
+  // The viewBox is the drawing at its intended size: 1352 wide, which is what
+  // the 1400px container leaves inside its padding, and 260 tall in total. At
+  // the design width it renders 1:1; narrower than that it scales down inside
+  // the fixed 260px box rather than stretching, so the labels never distort.
+  const ancho = 1352;
+  const alto = 218;
   const margenIzq = 54;
   // Room above the plot: without it the top Y reference and a high ceiling
   // label get clipped by the viewBox.
@@ -115,8 +115,11 @@ export function GraficoSerie({
   const paso = util / meses.length;
   const escala = (v: number) => margenSup + alto - (v / (tope || 1)) * alto;
 
-  // Narrow bars: a third of the slot, so the gap reads as wide as the bar.
-  const anchoBarra = Math.min(paso * 0.34, 26);
+  // Wide bars: three fifths of the slot. A third of the slot left each month
+  // reserving space the bar did not use, and twelve thin bars on a wide screen
+  // read as a scatter rather than a series. Capped so a three-month range does
+  // not draw slabs.
+  const anchoBarra = Math.min(paso * 0.6, 88);
 
   const marca = identidad ? (
     <figcaption className="flex items-center gap-1.5 text-[11px] text-ter">
@@ -131,11 +134,11 @@ export function GraficoSerie({
     : null;
 
   return (
-    <figure className="relative mt-5">
+    <figure className="relative mt-3">
       {marca}
       <svg
         viewBox={`0 0 ${ancho} ${margenSup + alto + 28}`}
-        className="h-[192px] w-full"
+        className="h-[260px] w-full"
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label={`Serie de ${meses.length} meses`}

@@ -6,6 +6,7 @@ import {
   MANTENER,
   APAGAR,
   LTV_USD,
+  SEMANAS_DE_TENDENCIA,
 } from "@/lib/umbrales";
 
 /**
@@ -30,7 +31,10 @@ export {
   MANTENER,
   APAGAR,
   LTV_USD,
+  SEMANAS_DE_TENDENCIA,
 } from "@/lib/umbrales";
+
+const DIAS_DE_TENDENCIA = SEMANAS_DE_TENDENCIA * 7;
 
 /** Meta pays for Instagram, so they share one pool of spend. */
 export const PLATAFORMAS_DE_META = ["Meta", "Instagram"];
@@ -204,7 +208,8 @@ export async function leerAds(
                   coalesce(sum(pacientes_nuevos), 0)::text as ventas,
                   coalesce(sum(registros), 0)::text as registros
              from marketing.metricas_utm
-            where pais = any($2) and fecha > $1::date - 42 and fecha <= $1::date
+            where pais = any($2) and fecha > $1::date - ${DIAS_DE_TENDENCIA}
+              and fecha <= $1::date
             group by 1, 2 order by 1`,
         [hasta, paises],
       ),
@@ -236,7 +241,7 @@ export async function leerAds(
       db.query<{ semana: string; plataforma: string; monto: string }>(
         `select to_char(date_trunc('week', fecha), 'YYYY-MM-DD') as semana,
                   plataforma, sum(monto_usd)::text as monto
-             from (${gastoPorDia("($1::date - 41)", "$1")}) g
+             from (${gastoPorDia(`($1::date - ${DIAS_DE_TENDENCIA - 1})`, "$1")}) g
             where pais = any($2)
             group by 1, 2`,
         [hasta, paises],

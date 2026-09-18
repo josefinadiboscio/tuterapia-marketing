@@ -146,3 +146,16 @@ body {
 :root[data-theme="light"] .mascota {
   filter: none;
 }
+
+/**
+ * Un solo ancho para toda la app: 1400px centrados.
+ *
+ * Antes cada pantalla elegía el suyo —1152 en General y Ads, 1024 en Funnel y
+ * Admin— y el header no coincidía con el contenido de abajo. Una clase, y las
+ * cinco pantallas quedan alineadas entre sí.
+ */
+.contenedor {
+  max-width: 1400px;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}

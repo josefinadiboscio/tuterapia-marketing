@@ -14,7 +14,14 @@ import {
 } from "@/lib/desglose";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
-import { entero, porcentaje, usd, decimal, SIN_DATO } from "@/lib/ui/format";
+import {
+  entero,
+  porcentaje,
+  usd,
+  decimal,
+  mesCorto,
+  SIN_DATO,
+} from "@/lib/ui/format";
 import { identidadDe, colorDe, colorPlataforma } from "@/components/identidad";
 
 export const dynamic = "force-dynamic";
@@ -137,7 +144,7 @@ export default async function General({
       <Nav activa="/general" ctx={ctx} />
       <Selectores activa="/general" ctx={ctx} conRango extra={extra} />
 
-      <main className="mx-auto max-w-6xl px-6 pb-8 pt-6">
+      <main className="contenedor pb-8 pt-6">
         {vista.serie.length === 0 ? (
           <p className="text-sm text-sec">
             No hay datos sincronizados para {ctx.pais}. Corré el job y volvé.
@@ -160,7 +167,7 @@ export default async function General({
 
             {/* Between the two blocks: the daily composition the monthly
                 aggregate hides. */}
-            <section className="mt-12">
+            <section className="mt-8">
               {/* The title follows the selected card: the chart draws whatever
                   the cards are pointing at, so a fixed title would lie. */}
               <h2 className="text-xs uppercase tracking-wide text-ter">
@@ -324,7 +331,7 @@ function Bloque({
     : [];
 
   return (
-    <section className="mt-2 first:mt-0 [&+section]:mt-12">
+    <section className="mt-2 first:mt-0 [&+section]:mt-8">
       <h2 className="text-xs uppercase tracking-wide text-ter">{titulo}</h2>
 
       <div
@@ -386,7 +393,7 @@ function Card({
     <Link
       href={href}
       title={metrica.definicion}
-      className={`block rounded-lg border bg-surface px-4 py-3 transition-colors ${
+      className={`block rounded-lg border bg-surface px-3 py-2.5 transition-colors ${
         activa ? borde : "border-borde hover:border-sec"
       }`}
     >
@@ -397,7 +404,7 @@ function Card({
           {/* On TOTAL the economy block shows one country large and the other
               small: averaging two markets with different commission, duration
               and LTV describes neither. */}
-          <p className="mt-1 text-2xl text-texto">
+          <p className="mt-0.5 text-xl text-texto">
             {metrica.formato(ultimoValor(porPais[0]!.serie, metrica.campo))}
           </p>
           <p className="mt-0.5 text-xs text-sec">
@@ -415,7 +422,7 @@ function Card({
         </>
       ) : (
         <>
-          <p className="mt-1 text-2xl text-texto">
+          <p className="mt-0.5 text-xl text-texto">
             {metrica.formato(ultimoValor(serie, metrica.campo))}
           </p>
           <DeltaCard ultimo={ultimo} cerrados={cerrados} metrica={metrica} />
@@ -527,10 +534,10 @@ function DeltaCard({
       cambio > 0 ? "text-forest" : cambio < 0 ? "text-coral" : "text-sec";
     const flecha = cambio > 0 ? "↑" : cambio < 0 ? "↓" : "→";
     return (
-      <p className={`mt-1 text-xs ${tono}`}>
+      <p className={`mt-0.5 truncate text-xs ${tono}`}>
         {flecha} {cambio >= 0 ? "+" : "−"}
-        {Math.abs(cambio * 100).toFixed(0)}% vs. los primeros{" "}
-        {ultimo.tramo_dias} días del mes anterior
+        {Math.abs(cambio * 100).toFixed(0)}% vs. mismos {ultimo.tramo_dias} días
+        de {mesCorto(mesPrevio(ultimo.mes))}
       </p>
     );
   }
@@ -654,4 +661,11 @@ function ultimoValor(
     if (v !== null) return v;
   }
   return null;
+}
+
+/** '2026-09' → '2026-08'. The card names the month it compares against. */
+function mesPrevio(mes: string): string {
+  const [year, month] = mes.split("-").map(Number);
+  const d = new Date(Date.UTC(year!, month! - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }

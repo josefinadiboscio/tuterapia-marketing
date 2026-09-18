@@ -29,7 +29,7 @@ export default async function Funnel({
       <Nav activa="/funnel" ctx={ctx} />
       <Selectores activa="/funnel" ctx={ctx} extra={{ periodo: String(periodo) }} />
 
-      <main className="mx-auto max-w-5xl px-6 pb-10 pt-6">
+      <main className="contenedor pb-10 pt-6">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-ter">Período</span>
           {PERIODOS.map((p) => (

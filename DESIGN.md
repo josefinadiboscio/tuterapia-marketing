@@ -394,3 +394,23 @@ tenga la caja antes de que llegue la imagen.
 El trazo es azul marino, hecho para el fondo crema. En oscuro se pierde, así
 que la clase `.mascota` lo invierte y gira el tono 180° —queda crema y el
 naranja sigue siendo naranja— y en claro no se toca.
+
+## Ancho y ritmo
+
+**1400px centrados para toda la app**, con la clase `.contenedor`. Antes cada
+pantalla elegía el suyo —1152 en General y Ads, 1024 en Funnel y Admin— y el
+header no coincidía con el contenido de abajo.
+
+Las cards de métrica van compactas: `px-3 py-2.5`, la cifra en `text-xl`, y el
+texto de tendencia en **una sola línea** ("vs. mismos 16 días de ago"). Dos
+líneas de explicación debajo de un número hacían la card más alta que el
+número que justifica.
+
+El gráfico mensual mide **260px de alto fijo** y sus barras ocupan el **60% del
+espacio de cada mes**. Con un tercio, cada mes reservaba espacio que la barra
+no usaba y doce barras finas en una pantalla ancha se leían como puntos
+sueltos.
+
+El viewBox del gráfico es 1352×260, que es lo que deja el contenedor de 1400
+adentro de su padding: al ancho de diseño va 1:1, y más angosto escala para
+adentro de la caja en lugar de estirarse, así las etiquetas nunca se deforman.

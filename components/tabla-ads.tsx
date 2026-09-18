@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Chispa } from "@/components/chispa";
 import { guardarDescripcion } from "@/app/ads/acciones";
 import { entero, usd, porcentaje, SIN_DATO } from "@/lib/ui/format";
+import { SEMANAS_DE_TENDENCIA } from "@/lib/umbrales";
 import type { Estado, FilaPlataforma, FilaUtm } from "@/lib/ads";
 
 const ETIQUETA: Record<Estado, string> = {
@@ -63,7 +64,9 @@ export function TablaAds({ filas }: { filas: FilaPlataforma[] }) {
       <thead>
         <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
           <th className="pb-2 font-normal">Campaña</th>
-          <th className="pb-2 text-center font-normal">Ventas 6 sem.</th>
+          <th className="pb-2 text-center font-normal">
+            Ventas {SEMANAS_DE_TENDENCIA} sem.
+          </th>
           <th className="pb-2 text-right font-normal">Registros</th>
           <th className="pb-2 text-right font-normal">Ventas</th>
           <th className="pb-2 text-right font-normal">Conv.</th>

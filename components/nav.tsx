@@ -69,7 +69,7 @@ export async function Nav({
       {/* The sync stamp sits alone in the top margin: it is a status, not a
           control, and it was competing with the selectors for the same
           corner. */}
-      <div className="mx-auto flex max-w-6xl items-baseline justify-between gap-6 px-6 pt-4">
+      <div className="contenedor flex items-baseline justify-between gap-6 pt-4">
         <h1 className="text-sm font-medium">Tu Terapia · Marketing</h1>
         <div className="flex items-baseline gap-4 text-[11px] text-ter">
           <span>
@@ -85,7 +85,7 @@ export async function Nav({
 
       {/* items-end so the mascots at the end of the row stand on the divider
           rather than floating above it. */}
-      <nav className="mx-auto flex max-w-6xl items-end gap-5 px-6 pt-3 text-sm">
+      <nav className="contenedor flex items-end gap-5 pt-3 text-sm">
         {PESTANAS.map((p) => (
           <Link
             key={p.href}
@@ -119,7 +119,7 @@ export function Selectores({
   extra?: Record<string, string>;
 }) {
   return (
-    <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-6 pt-5">
+    <div className="contenedor flex flex-wrap items-center gap-3 pt-5">
       <div className="flex items-center overflow-hidden rounded-md border border-borde">
         {PAISES_UI.map((p) => (
           <Link

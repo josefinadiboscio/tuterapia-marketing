@@ -34,7 +34,7 @@ export default async function Ads({
       <Nav activa="/ads" ctx={ctx} />
       <Selectores activa="/ads" ctx={ctx} extra={{ desde, hasta }} />
 
-      <main className="mx-auto max-w-6xl px-6 pb-8 pt-6">
+      <main className="contenedor pb-8 pt-6">
         {/* The range is a form rather than links: any two dates, not a menu. */}
         <form method="get" className="flex flex-wrap items-end gap-3 text-xs">
           <input type="hidden" name="pais" value={ctx.pais} />

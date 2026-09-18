@@ -14,6 +14,18 @@ export const MANTENER = 1.3;
 /** Three weeks under this in a row is a switch-off, not a trim. */
 export const APAGAR = 1.0;
 
+/**
+ * How many weeks the trend bars cover.
+ *
+ * Four, not six: the bars say what is happening now, and six weeks of a
+ * campaign that changed three weeks ago is mostly history. The switch-off rule
+ * still fits — three weeks under 1,0 in a row — with a week of margin.
+ *
+ * Here and not in lib/ads because the table header prints it and that header
+ * runs in the browser.
+ */
+export const SEMANAS_DE_TENDENCIA = 4;
+
 export type Tono = "verde" | "oro" | "coral" | "nulo";
 
 /**

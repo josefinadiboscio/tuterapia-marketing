@@ -415,3 +415,19 @@ sueltos.
 El viewBox del gráfico es 1352×260, que es lo que deja el contenedor de 1400
 adentro de su padding: al ancho de diseño va 1:1, y más angosto escala para
 adentro de la caja en lugar de estirarse, así las etiquetas nunca se deforman.
+
+## El título del header
+
+**Fraunces 600**, cargada con `next/font` y un solo peso: es la única línea de
+la app que la usa, y pedir el rango variable completo serían varias veces los
+bytes para un renglón.
+
+Es la tipografía display y el cuerpo sigue en la sans del sistema. El contraste
+entre las dos es lo que hace que el título deje de leerse como una etiqueta
+más. Fraunces tiene remates suaves y algo excéntricos: conversa con los
+monigotes dibujados a mano y con el fondo crema, que es justo lo que una
+geométrica no haría.
+
+"Tu Terapia" en el color de texto, el "·" en gris tenue, "Marketing Dash" en
+naranja. 28px, sin `letter-spacing` y sin mayúsculas — el carácter lo pone la
+tipografía, no el tratamiento.

@@ -70,7 +70,11 @@ export async function Nav({
           control, and it was competing with the selectors for the same
           corner. */}
       <div className="contenedor flex items-baseline justify-between gap-6 pt-4">
-        <h1 className="text-sm font-medium">Tu Terapia · Marketing</h1>
+        <h1 className="titulo-app">
+          <span className="text-texto">Tu Terapia</span>
+          <span className="mx-1.5 text-ter">·</span>
+          <span className="text-orange">Marketing Dash</span>
+        </h1>
         <div className="flex items-baseline gap-4 text-[11px] text-ter">
           <span>
             {ultimaSync

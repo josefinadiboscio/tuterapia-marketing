@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { mesCorto, entero, porcentaje, usd, decimal } from "@/lib/ui/format";
 import { TooltipUtm, detalleDe } from "@/components/tooltip-utm";
+import { Composicion } from "@/components/composicion";
 import type { Punto } from "@/lib/desglose";
 
 /**
@@ -101,11 +102,13 @@ export function GraficoSerie({
   const referencias = escalaY(maximo);
   const tope = referencias[referencias.length - 1]!;
 
-  // The viewBox is the drawing at its intended size: 1352 wide, which is what
-  // the 1400px container leaves inside its padding, and 260 tall in total. At
-  // the design width it renders 1:1; narrower than that it scales down inside
-  // the fixed 260px box rather than stretching, so the labels never distort.
-  const ancho = 1352;
+  // The viewBox is the drawing at its intended size. The container leaves 1352
+  // inside its padding; when the composition panel is beside it the chart gets
+  // what is left after the panel's 420 and the 16 of gap. At that width it
+  // renders 1:1, and narrower it scales down inside the fixed 260px box rather
+  // than stretching, so the labels never distort.
+  const conPanel = apiladas && series.length > 1;
+  const ancho = conPanel ? 916 : 1352;
   const alto = 218;
   const margenIzq = 54;
   // Room above the plot: without it the top Y reference and a high ceiling
@@ -128,13 +131,23 @@ export function GraficoSerie({
     </figcaption>
   ) : null;
 
+  // The panel opens on the last closed month and follows the mouse from there.
+  // A month still running is half a month, and the composition of half a month
+  // is not what the screen is asked for when nobody is pointing at anything.
+  const ultimoCerrado = meses.reduce(
+    (elegido, p, i) => (p.enCurso ? elegido : i),
+    meses.length - 1,
+  );
+  const indicePanel = activo ?? ultimoCerrado;
+
   const mesActivo = activo === null ? null : meses[activo]?.mes;
   const detalle = mesActivo
     ? detalleDe(utm, mesActivo, mesCorto(mesActivo), rate)
     : null;
 
   return (
-    <figure className="relative mt-3">
+    <div className="mt-3 flex flex-col items-start gap-4 lg:flex-row">
+    <figure className="relative min-w-0 flex-1">
       {marca}
       <svg
         viewBox={`0 0 ${ancho} ${margenSup + alto + 28}`}
@@ -314,7 +327,9 @@ export function GraficoSerie({
         </p>
       ) : null}
 
-      {series.length > 1 && !vacia ? (
+      {/* The legend only where the panel is not: with the panel it would be
+          the same colours twice, one of them without numbers. */}
+      {series.length > 1 && !vacia && !conPanel ? (
         <div className="mt-1 flex flex-wrap gap-x-5 text-[11px] text-ter">
           {series.map((s) => (
             <span key={s.nombre} className="flex items-center gap-1.5">
@@ -328,6 +343,16 @@ export function GraficoSerie({
         </div>
       ) : null}
     </figure>
+
+      {conPanel ? (
+        <Composicion
+          series={series}
+          indice={indicePanel}
+          meses={meses}
+          formato={FORMATO[formatoId]}
+        />
+      ) : null}
+    </div>
   );
 }
 

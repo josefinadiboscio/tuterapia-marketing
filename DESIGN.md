@@ -431,3 +431,27 @@ geométrica no haría.
 "Tu Terapia" en el color de texto, el "·" en gris tenue, "Marketing Dash" en
 naranja. 28px, sin `letter-spacing` y sin mayúsculas — el carácter lo pone la
 tipografía, no el tratamiento.
+
+## Panel de composición
+
+A la derecha del gráfico mensual, en una card de fondo blanco sobre el crema y
+alineada arriba con el gráfico. 420px fijos; el gráfico se queda con el resto.
+
+Encabezado con el mes y el total, y debajo la lista ordenada de mayor a menor:
+nombre, cantidad, porcentaje y barra de proporción. **Reemplaza la leyenda de
+colores** que estaba abajo de las barras: mismos colores, mismo orden, y además
+los números que la leyenda nunca dio. La leyenda sigue existiendo donde no hay
+panel — Economía, que no apila.
+
+Lee las mismas `series` que dibuja el gráfico, así que sigue sola a la métrica
+elegida y al selector de país: desglosa **lo que el gráfico apila**. Con un país
+elegido eso son plataformas; en TOTAL son países, porque es por país que apilan
+las barras.
+
+Por defecto muestra el **último mes cerrado**, no el mes en curso: la
+composición de medio mes no es lo que se está preguntando cuando nadie señala
+nada. Pasando el mouse por una barra sigue ese mes; al salir vuelve.
+
+Menos del 2% se agrupa en "otras", y también la cola que sobre después de cinco
+filas nombradas. Once plataformas donde siete redondean a cero vuelven a ser una
+leyenda, no una lectura.

@@ -386,8 +386,9 @@ al recargar, distinta mañana, y la misma para las cuatro así cambian juntas.
 Día local (UTC−3). La hora ya no interviene en nada.
 
 Los doce PNG viven en `public/mascots/`, recortados a su tinta y escalados con
-un factor común: la pose de pie más alta mide 46px y la que duerme mide los
-28px que realmente mide. Darles la misma altura a todas la agrandaría al doble
+un factor común: la pose de pie más alta mide **64px** (`ALTO_MAXIMO`, el único
+número a tocar si hay que agrandarlos otra vez) y la que duerme mide, en
+proporción, los 39 que le corresponden. Darles la misma altura a todas la agrandaría al doble
 del resto. Cada `<img>` lleva su ancho y alto escritos para que el navegador
 tenga la caja antes de que llegue la imagen.
 

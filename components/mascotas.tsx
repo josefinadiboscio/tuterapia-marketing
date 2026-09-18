@@ -21,15 +21,27 @@ import { LOCAL_UTC_OFFSET_HOURS } from "@/lib/queries/shared";
 const FRANJAS = ["noche", "manana", "tarde", "creando"] as const;
 
 /**
- * The size each file is drawn at.
+ * How tall the tallest standing pose is drawn. The one number to turn.
+ *
+ * Everything else keeps its proportion against it, so the one lying down stays
+ * short instead of being blown up to match.
+ */
+const ALTO_MAXIMO = 64;
+
+/** What the table below is written at, so ALTO_MAXIMO scales it. */
+const ALTO_BASE = 46;
+
+/**
+ * The size each file is drawn at, at ALTO_BASE.
  *
  * They are not all the same height on purpose: the twelve were trimmed to
  * their ink and scaled by one common factor, so the tallest standing pose is
- * 46px and the one lying down is the 28px she actually measures. Giving them
- * all the same height would blow her up to twice everyone else's size.
+ * the reference and the one lying down is the 28 she actually measures.
  *
  * Baked in rather than measured at runtime: the browser needs the box before
- * the image arrives, or the row reflows when it lands.
+ * the image arrives, or the row reflows when it lands. The files are exported
+ * at four times this, so at 64 they are still drawn from nearly three times
+ * the pixels they need.
  */
 const TAMANO: Record<string, { ancho: number; alto: number }> = {
   "creando-1": { ancho: 31, alto: 39 },
@@ -60,12 +72,13 @@ export function Mascotas({ ahora = new Date() }: { ahora?: Date }) {
       {FRANJAS.map((nombre) => {
         const archivo = `${nombre}-${variante}`;
         const t = TAMANO[archivo]!;
+        const escala = ALTO_MAXIMO / ALTO_BASE;
         return (
           <img
             key={nombre}
             src={`/mascots/${archivo}.png`}
-            width={t.ancho}
-            height={t.alto}
+            width={Math.round(t.ancho * escala)}
+            height={Math.round(t.alto * escala)}
             alt=""
             draggable={false}
             className="mascota block select-none"

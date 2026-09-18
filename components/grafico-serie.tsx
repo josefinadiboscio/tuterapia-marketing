@@ -131,14 +131,10 @@ export function GraficoSerie({
     </figcaption>
   ) : null;
 
-  // The panel opens on the last closed month and follows the mouse from there.
-  // A month still running is half a month, and the composition of half a month
-  // is not what the screen is asked for when nobody is pointing at anything.
-  const ultimoCerrado = meses.reduce(
-    (elegido, p, i) => (p.enCurso ? elegido : i),
-    meses.length - 1,
-  );
-  const indicePanel = activo ?? ultimoCerrado;
+  // The panel opens on the month running and follows the mouse from there.
+  // It is half a month and the header says so, but it is the month being
+  // worked on, which is what somebody opening the screen came to see.
+  const indicePanel = activo ?? meses.length - 1;
 
   const mesActivo = activo === null ? null : meses[activo]?.mes;
   const detalle = mesActivo

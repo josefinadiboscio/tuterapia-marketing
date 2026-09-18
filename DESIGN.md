@@ -448,9 +448,10 @@ elegida y al selector de país: desglosa **lo que el gráfico apila**. Con un pa
 elegido eso son plataformas; en TOTAL son países, porque es por país que apilan
 las barras.
 
-Por defecto muestra el **último mes cerrado**, no el mes en curso: la
-composición de medio mes no es lo que se está preguntando cuando nadie señala
-nada. Pasando el mouse por una barra sigue ese mes; al salir vuelve.
+Por defecto muestra el **mes en curso**, con "· en curso" al lado del nombre
+para que se lea que es medio mes: es el mes sobre el que se está trabajando, que
+es a lo que uno viene. Pasando el mouse por una barra sigue ese mes; al salir
+vuelve.
 
 Menos del 2% se agrupa en "otras", y también la cola que sobre después de cinco
 filas nombradas. Once plataformas donde siete redondean a cero vuelven a ser una

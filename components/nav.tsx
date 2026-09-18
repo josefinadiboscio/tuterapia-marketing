@@ -3,7 +3,12 @@ import { cookies } from "next/headers";
 import { fechaHora } from "@/lib/ui/format";
 import { ToggleTema } from "@/components/tema";
 import { RecordarPais } from "@/components/recordar-pais";
-import { RANGOS, leerUltimaSync, type Rango } from "@/lib/dashboard";
+import {
+  RANGOS,
+  SIN_TERMINAR,
+  leerUltimaSync,
+  type Rango,
+} from "@/lib/dashboard";
 import { identidadDe } from "@/components/identidad";
 import { Mascotas } from "@/components/mascotas";
 
@@ -78,9 +83,9 @@ export async function Nav({
         <div className="flex items-baseline gap-4 text-[11px] text-ter">
           <span>
             {ultimaSync
-              ? `Última sincronización ${fechaHora(ultimaSync.corrida_en)}${
-                  ultimaSync.error ? " · terminó con error" : ""
-                }`
+              ? `Última sincronización ${fechaHora(ultimaSync.corrida_en)}${estado(
+                  ultimaSync.error,
+                )}`
               : "Sin sincronizaciones"}
           </span>
           <ToggleTema />
@@ -166,4 +171,23 @@ export function Selectores({
       ) : null}
     </div>
   );
+}
+
+/**
+ * What the last run's error column says about it.
+ *
+ * The job opens its row before doing the work and closes it after, so a run
+ * killed at the sixty-second ceiling — which reaches no catch, because the
+ * process is gone — leaves the row open. That is not the same as a run that
+ * failed and said so, and the header has to tell them apart: an open row means
+ * the numbers under it are half written.
+ *
+ * A run in flight reads the same way for the minute it lasts. Nobody is
+ * looking at five in the morning, and while a sync is still going "no terminó"
+ * is simply true.
+ */
+function estado(error: string | null): string {
+  if (error === null) return "";
+  if (error === SIN_TERMINAR) return " · no terminó";
+  return " · terminó con error";
 }

@@ -42,6 +42,16 @@ export type Rango = (typeof RANGOS)[number];
 export const PAISES_REALES = ["AR", "UY"] as const;
 
 /**
+ * What sits in sync_log.error while a run is still going.
+ *
+ * The job writes it when it opens the row and overwrites it when it closes.
+ * A row still carrying it after the run should have ended means the run died
+ * without a word — the only trace a kill at the sixty-second ceiling leaves,
+ * because a killed process reaches no catch block.
+ */
+export const SIN_TERMINAR = "sin terminar";
+
+/**
  * General reads a series, not a month: the screen answers "where is this
  * going", and a single month cannot answer that.
  *

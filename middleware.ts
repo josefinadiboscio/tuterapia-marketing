@@ -1,27 +1,68 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { COOKIE, tokenDeSesion } from "@/lib/sesion";
+import { createServerClient } from "@supabase/ssr";
+import { esDelDominio } from "@/lib/supabase/dominio";
 
 /**
- * Everything is behind the gate except the login screen and the cron routes,
- * which carry their own bearer token.
+ * La puerta. Todo pasa por acá salvo el login y los crons, que llevan su
+ * propio bearer.
  *
- * Fails closed: with no DASHBOARD_PASSWORD set, nobody gets in. An open
- * dashboard is worse than a locked one.
+ * Hace dos cosas en el mismo paso: refresca el token de Supabase —un Server
+ * Component no puede escribir cookies, así que si el refresh no ocurre acá no
+ * ocurre en ningún lado— y decide si la sesión entra.
+ *
+ * Falla cerrada. Sin variables de entorno, sin sesión o con una cuenta que no
+ * es del dominio de la empresa, la respuesta es el login. Un dashboard abierto
+ * es peor que uno trabado.
  */
 export async function middleware(request: NextRequest) {
-  const password = process.env.DASHBOARD_PASSWORD;
-  if (!password) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const clave = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !clave) {
     return NextResponse.redirect(new URL("/login?falta=1", request.url));
   }
 
-  const cookie = request.cookies.get(COOKIE)?.value;
-  if (cookie && cookie === (await tokenDeSesion(password))) {
-    return NextResponse.next();
+  // `response` se reasigna dentro de setAll: cuando Supabase rota el token
+  // hay que devolver una respuesta nueva que lleve las cookies nuevas, o el
+  // browser se queda con el token viejo y la sesión se cae sola en una hora.
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(url, clave, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll: (aGuardar) => {
+        for (const { name, value } of aGuardar) {
+          request.cookies.set(name, value);
+        }
+        response = NextResponse.next({ request });
+        for (const { name, value, options } of aGuardar) {
+          response.cookies.set(name, value, options);
+        }
+      },
+    },
+  });
+
+  // getUser y no getSession: getSession lee la cookie y le cree. Esto valida
+  // el token contra Supabase, que es lo único que sirve para decidir acceso.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return NextResponse.redirect(new URL("/login", request.url));
+  if (!esDelDominio(user.email)) {
+    // La cuenta existe pero no es de la empresa. Se cierra la sesión en vez de
+    // dejarla dando vueltas: si no puede entrar, no debería seguir viva.
+    await supabase.auth.signOut();
+    return NextResponse.redirect(new URL("/login?dominio=1", request.url));
+  }
+
+  return response;
 }
 
 export const config = {
-  matcher: ["/((?!login|api/login|api/cron|_next/static|_next/image|favicon).*)"],
+  matcher: [
+    "/((?!login|api/login|api/logout|api/cron|_next/static|_next/image|favicon).*)",
+  ],
 };

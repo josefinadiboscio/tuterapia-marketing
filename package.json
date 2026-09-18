@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0",
     "mysql2": "^3.24.4",
     "next": "^16.3.5",
     "pg": "^8.23.0",

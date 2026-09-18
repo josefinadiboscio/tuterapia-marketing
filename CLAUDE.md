@@ -91,9 +91,16 @@ job como la web. **Nunca duplicar un cálculo entre las dos.**
 - Esa ruta es la única que consulta MySQL en vivo. Guardar los datos personales
   en Supabase sería peor: dejaría una segunda copia permanente de un padrón de
   pacientes en tratamiento, sincronizada todas las noches.
-- **Riesgo abierto, sin resolver**: el dashboard entra con una sola contraseña
-  compartida, así que cualquiera que la tenga puede bajar el padrón completo y
-  no queda registro de quién lo hizo.
+- **Quién entra**: Supabase Auth, una cuenta por persona, restringido a
+  `@tuterapia.com.uy`. Se verifica en el login —así una cuenta de afuera no
+  llega a tener sesión— y de nuevo en el middleware en cada request.
+- Esto reemplazó a la contraseña compartida, que era el riesgo abierto de este
+  documento: cualquiera que la tuviera podía bajar el padrón completo y no
+  quedaba registro de quién lo había hecho. Ahora cada descarga nominal se
+  firma con un mail.
+- **Riesgo abierto, sin resolver**: las cuatro cuentas se crearon el 2026-09-18
+  con la misma contraseña, así que hasta que cada persona cambie la suya el
+  registro dice de quién es la cuenta, no quién la usó.
 - Agregar del lado de MySQL y traer el resultado ya reducido. No traer filas
   crudas para agregar en memoria. El job tiene 60 segundos.
 - Sincronización incremental por fecha, no tabla completa.

@@ -9,6 +9,7 @@ import {
   leerUltimaSync,
   type Rango,
 } from "@/lib/dashboard";
+import { usuarioActual } from "@/lib/supabase/servidor";
 import { identidadDe } from "@/components/identidad";
 import { Mascotas } from "@/components/mascotas";
 
@@ -65,7 +66,10 @@ export async function Nav({
   activa: string;
   ctx: Contexto;
 }) {
-  const ultimaSync = await leerUltimaSync();
+  const [ultimaSync, usuario] = await Promise.all([
+    leerUltimaSync(),
+    usuarioActual(),
+  ]);
 
   return (
     <header className="border-b border-borde">
@@ -88,6 +92,22 @@ export async function Nav({
                 )}`
               : "Sin sincronizaciones"}
           </span>
+          {/* Quién está mirando. Con contraseña compartida no había a quién
+              nombrar; ahora sí, y es lo que firma cada descarga de datos
+              personales en marketing.export_log. */}
+          {usuario ? (
+            <form action="/api/logout" method="post" className="flex items-baseline gap-1.5">
+              <span className="text-sec" title={usuario.email}>
+                {usuario.email.split("@")[0]}
+              </span>
+              <button
+                type="submit"
+                className="text-ter underline decoration-borde underline-offset-2 hover:text-texto"
+              >
+                salir
+              </button>
+            </form>
+          ) : null}
           <ToggleTema />
         </div>
       </div>

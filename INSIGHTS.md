@@ -47,6 +47,18 @@ Si esto pasa a producción de verdad, el camino es mover la generación a
 `/app/api/cron/insights` con la API de Claude y dejar esta rutina como lo que
 es: una forma de probar sin pagar.
 
+### Estado al 2026-09-19
+
+Las seis filas que hay se escribieron a mano en una sesión de Claude Code. La
+rutina diaria **existe pero está deshabilitada**: se creó desde la sesión y no
+quedó con los conectores de Supabase, así que al dispararse no podría ni leer
+los agregados ni escribir la tabla. Para que corra hay que crearla desde la UI
+de rutinas de claude.ai, donde el conector se puede adjuntar.
+
+Mientras siga así, los insights se generan a mano o no se generan. La pantalla
+muestra la antigüedad del análisis, que es lo único que evita que eso pase
+inadvertido.
+
 ---
 
 ## Estructura de la pantalla

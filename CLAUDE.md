@@ -6,6 +6,8 @@ Looker Studio.
 **Antes de escribir cualquier código, leé `METRICAS.md` y `BUILD.md`.**
 `METRICAS.md` es la fuente de verdad de todas las definiciones de métricas.
 `BUILD.md` es el plan de construcción por fases.
+`INSIGHTS.md` describe la pestaña de análisis — incluido el hecho de que su
+generador **no vive en este repositorio**.
 
 ---
 
@@ -63,6 +65,7 @@ mantiene una sola persona.
 ```
 /METRICAS.md              definiciones — fuente de verdad
 /BUILD.md                 plan por fases
+/INSIGHTS.md              pestaña de análisis — el generador está afuera
 /app                      Next.js App Router
   /api/cron/sync          job de sincronización
 /lib/metrics              fórmulas compartidas

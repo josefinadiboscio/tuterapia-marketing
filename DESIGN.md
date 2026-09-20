@@ -456,3 +456,32 @@ vuelve.
 Menos del 2% se agrupa en "otras", y también la cola que sobre después de cinco
 filas nombradas. Once plataformas donde siete redondean a cero vuelven a ser una
 leyenda, no una lectura.
+
+## Los números del gráfico diario
+
+Las treinta barras llevan su total escrito arriba, en tinta apagada.
+
+Eso va en contra de la regla general —**nunca un número en cada punto**— y la
+regla tiene razón casi siempre: un valor al lado de cada marca se vuelve ruido
+y nadie lo lee. La excepción acá es que este gráfico no tenía **ninguna** otra
+forma de leer un valor. No hay eje, no hay grilla, y la única pista era
+"máximo 58 por día" al pie. El número exacto existía solo en el tooltip, o sea
+solo para quien supiera que hay que apuntarle a una barra de 18 píxeles.
+
+Lo que la mantiene legible:
+
+- van en `fill-ter`, la misma tinta que las fechas, así la forma se lee primero
+  y el número aparece cuando lo buscás;
+- 10px sobre un slot de ~37 unidades de viewBox, y los valores son de una o dos
+  cifras, así que entran con aire de sobra;
+- el `viewBox` arranca en −14 para que la etiqueta de la barra más alta tenga
+  lugar. Una etiqueta cortada por el borde es peor que no ponerla;
+- el día apuntado pasa a `fill-texto`, que es la única jerarquía que hay entre
+  ellos.
+
+El tooltip sigue siendo el lugar del desglose por `utm_source`: el número de
+arriba es el total del día y nada más.
+
+Si alguna vez el gráfico pasa a más de treinta barras, o los valores a cuatro
+cifras, esto deja de entrar y hay que volver a la regla: eje con un par de
+marcas, y el número directo solo en el máximo.

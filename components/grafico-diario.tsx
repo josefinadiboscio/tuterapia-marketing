@@ -75,9 +75,12 @@ export function GraficoDiario({
 
   return (
     <figure className="relative mt-3">
+      {/* El viewBox arranca en −14 para que la etiqueta de la barra más alta
+          tenga lugar: si empezara en 0 quedaría cortada por el borde, que es
+          peor que no ponerla. */}
       <svg
-        viewBox={`0 0 ${ancho} ${alto + 22}`}
-        className="h-[142px] w-full"
+        viewBox={`0 -14 ${ancho} ${alto + 36}`}
+        className="h-[156px] w-full"
         onMouseLeave={() => setActivo(null)}
       >
         {fechas.map((fecha, i) => {
@@ -106,6 +109,31 @@ export function GraficoDiario({
                 );
               })}
             </g>
+          );
+        })}
+
+        {/* El total de cada día, arriba de su barra.
+            La guía de visualización dice no numerar todos los puntos, y tiene
+            razón cuando el gráfico es sobre la forma. Acá el gráfico no tenía
+            eje ni grilla, así que no había NINGUNA manera de leer un valor sin
+            pasar el mouse — y apuntarle a una barra de 18px no es una manera.
+            Van en tinta apagada y chicos: la forma se lee primero, el número
+            está cuando lo buscás. El día apuntado se enciende. */}
+        {fechas.map((fecha, i) => {
+          const total = totales[i]!;
+          if (total === 0) return null;
+          return (
+            <text
+              key={`n-${fecha}`}
+              x={i * paso + paso / 2}
+              y={alto - (total / maximo) * alto - 4}
+              textAnchor="middle"
+              className={`text-[10px] ${
+                activo === i ? "fill-texto" : "fill-ter"
+              }`}
+            >
+              {rate ? porcentaje(total, 0) : entero(total)}
+            </text>
           );
         })}
 

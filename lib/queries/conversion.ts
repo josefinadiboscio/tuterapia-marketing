@@ -1,6 +1,7 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
 import {
   monthRangeUtc,
+  type Rango,
   diasLocales,
   PRIMER_PAGO,
   PRIMERA_SESION,
@@ -38,6 +39,46 @@ export async function conversionCohorte(
       WHERE l.tipo = 1 AND l.paisDominio = ?
         AND l.creacion >= ? AND l.creacion < ?`,
     [pais, start, end],
+  );
+  return {
+    registros: Number(rows[0]?.registros ?? 0),
+    convertidos: Number(rows[0]?.convertidos ?? 0),
+  };
+}
+
+/**
+ * La conversión de un tramo del mes, truncada en el mismo punto de
+ * observación. Es lo que permite comparar "cómo viene septiembre" contra "cómo
+ * venía agosto a esta altura".
+ *
+ * La cohorte del mes en curso no se puede comparar contra un mes cerrado: el
+ * que se registró ayer tuvo un día de sus treinta, y arrastra el número para
+ * abajo por calendario y no por conversión. Truncar las dos puntas en el mismo
+ * día de vida resuelve eso — el que se registró el día 19 tuvo un día en los
+ * dos meses.
+ *
+ * Mantiene el tope de 30 días de `conversionCohorte`, así que cuando el tramo
+ * cubre el mes entero y ya pasaron los treinta, las dos dan lo mismo. Es la
+ * misma definición mirada antes, no otra métrica.
+ */
+export async function conversionTramo(
+  conn: Connection,
+  rango: Rango,
+  pais: Pais,
+): Promise<{ registros: number; convertidos: number }> {
+  const { start, end } = rango;
+  const [rows] = await conn.query<
+    (RowDataPacket & { registros: number; convertidos: number })[]
+  >(
+    `SELECT COUNT(*) AS registros,
+            SUM(f.primera IS NOT NULL
+                AND f.primera < ?
+                AND f.primera < DATE_ADD(l.creacion, INTERVAL ${VENTANA_CONVERSION_DIAS} DAY)) AS convertidos
+       FROM login l
+       LEFT JOIN (${PRIMER_PAGO}) f ON f.id_paciente = l.id
+      WHERE l.tipo = 1 AND l.paisDominio = ?
+        AND l.creacion >= ? AND l.creacion < ?`,
+    [end, pais, start, end],
   );
   return {
     registros: Number(rows[0]?.registros ?? 0),

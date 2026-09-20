@@ -57,20 +57,21 @@ const VOLUMEN = [
     id: "activos",
     nombre: "Pacientes activos",
     campo: (m: MesSerie) => m.pacientes_activos,
+    tramo: (m: MesSerie) => m.pacientes_activos_tramo_previo,
     formato: (n: number | null) => entero(n),
     formatoId: "entero" as const,
     unidad: "pct" as const,
-    contraMesPrevio: true,
     definicion: "Pacientes con al menos una sesión realizada en el mes.",
   },
   {
     id: "conversion",
     nombre: "Conversión",
     campo: (m: MesSerie) => m.conversion_cohorte,
+    tramo: (m: MesSerie) => m.conversion_tramo_previo,
+    tramoActual: (m: MesSerie) => m.conversion_tramo,
     formato: (n: number | null) => porcentaje(n),
     formatoId: "porcentaje" as const,
     unidad: "pp" as const,
-    contraMesPrevio: true,
     definicion:
       "De los que se registraron en el mes, cuántos compraron dentro de los 30 días.",
   },
@@ -219,6 +220,16 @@ type Metrica = {
    * delta would read as a collapse that never happened.
    */
   tramo?: (m: MesSerie) => number | null;
+  /**
+   * El valor del tramo EN CURSO, cuando no coincide con `campo`.
+   *
+   * Solo lo necesita conversión: su valor del mes es la cohorte entera con su
+   * ventana de 30 días, y el tramo es esa misma cohorte truncada en el día de
+   * hoy. Comparar una contra otra sería comparar dos medidas distintas.
+   * Registros y activos no lo necesitan porque el valor de un mes corriendo ya
+   * es el tramo transcurrido.
+   */
+  tramoActual?: (m: MesSerie) => number | null;
   formato: (n: number | null) => string;
   /** The same format, as a name: a function cannot cross into the chart. */
   formatoId: FormatoId;
@@ -595,25 +606,24 @@ function DeltaCard({
   }
 
   const previo = ultimo && metrica.tramo ? metrica.tramo(ultimo) : null;
-  const actual = ultimo ? metrica.campo(ultimo) : null;
+  // Conversión trae su propio valor de tramo; para las demás el valor del mes
+  // corriendo ya ES el tramo transcurrido.
+  const actual = ultimo ? (metrica.tramoActual ?? metrica.campo)(ultimo) : null;
 
-  if (
-    ultimo?.es_provisorio &&
-    previo !== null &&
-    previo > 0 &&
-    actual !== null
-  ) {
-    const cambio = actual / previo - 1;
-    const tono =
-      cambio > 0 ? "text-green" : cambio < 0 ? "text-coral" : "text-sec";
-    const flecha = cambio > 0 ? "↑" : cambio < 0 ? "↓" : "→";
-    return (
-      <p className={`mt-0.5 truncate text-xs ${tono}`}>
-        {flecha} {cambio >= 0 ? "+" : "−"}
-        {Math.abs(cambio * 100).toFixed(0)}% vs. mismos {ultimo.tramo_dias} días
-        de {mesCorto(mesPrevio(ultimo.mes))}
-      </p>
-    );
+  if (ultimo?.es_provisorio && previo !== null && actual !== null) {
+    const movimiento = medir(actual, previo, metrica);
+    if (movimiento !== null) {
+      const { texto, signo } = movimiento;
+      const tono =
+        signo === 0 ? "text-sec" : signo > 0 ? "text-green" : "text-coral";
+      const flecha = signo === 0 ? "→" : signo > 0 ? "↑" : "↓";
+      return (
+        <p className={`mt-0.5 truncate text-xs ${tono}`}>
+          {flecha} {texto} vs. mismos {ultimo.tramo_dias} días de{" "}
+          {mesCorto(mesPrevio(ultimo.mes))}
+        </p>
+      );
+    }
   }
 
   return <TendenciaCard serie={cerrados} metrica={metrica} />;

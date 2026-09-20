@@ -20,6 +20,10 @@ export type MesSerie = {
   /** The same stretch of the previous month, for a like-for-like delta. */
   registros_tramo_previo: number | null;
   pacientes_nuevos_tramo_previo: number | null;
+  pacientes_activos_tramo_previo: number | null;
+  /** Conversión del tramo transcurrido, y la del mismo tramo del mes anterior. */
+  conversion_tramo: number | null;
+  conversion_tramo_previo: number | null;
 };
 
 export type VistaGeneral = {
@@ -76,7 +80,8 @@ export async function leerGeneral(
                 costo_por_registro_usd, ltv_usd, sesiones_historico,
                 es_provisorio,
                 tramo_dias, registros_tramo_previo,
-                pacientes_nuevos_tramo_previo
+                pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
+                conversion_tramo, conversion_tramo_previo
            from marketing.metricas_mensuales
           where pais = $1 and plataforma = 'TODAS'
           order by mes desc limit $2`,
@@ -105,7 +110,8 @@ export async function leerGeneral(
                         costo_por_registro_usd, ltv_usd, sesiones_historico,
                 es_provisorio,
                 tramo_dias, registros_tramo_previo,
-                pacientes_nuevos_tramo_previo
+                pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
+                conversion_tramo, conversion_tramo_previo
                    from marketing.metricas_mensuales
                   where pais = $1 and plataforma = 'TODAS'
                   order by mes desc limit $2`,
@@ -178,5 +184,8 @@ function normalizar(fila: Record<string, unknown>): MesSerie {
     tramo_dias: num(fila.tramo_dias),
     registros_tramo_previo: num(fila.registros_tramo_previo),
     pacientes_nuevos_tramo_previo: num(fila.pacientes_nuevos_tramo_previo),
+    pacientes_activos_tramo_previo: num(fila.pacientes_activos_tramo_previo),
+    conversion_tramo: num(fila.conversion_tramo),
+    conversion_tramo_previo: num(fila.conversion_tramo_previo),
   };
 }

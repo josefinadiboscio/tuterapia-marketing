@@ -17,6 +17,7 @@ import {
 } from "@/lib/queries/pacientes";
 import {
   conversionCohorte,
+  conversionTramo,
   diasHastaPago,
   curvaConversion,
   diasHastaPrimeraSesion,
@@ -76,14 +77,25 @@ type Fila = {
   registros_tramo_previo: number | null;
   pacientes_nuevos_tramo_previo: number | null;
   pacientes_activos_tramo_previo: number | null;
+  conversion_tramo: number | null;
+  conversion_tramo_previo: number | null;
   tramo_dias: number | null;
 };
 
 /** The same stretch of the previous month, for a month still running. */
+type Conteo = { registros: number; convertidos: number };
+
 type TramoPrevio = {
   registros: number;
   pacientes_nuevos: number;
   pacientes_activos: number;
+  /**
+   * Conteos, no tasas: el TOTAL suma convertidos sobre registros de los dos
+   * países, nunca promedia dos porcentajes. Sumar 9,4% con 11,0% no da nada.
+   */
+  conversion: Conteo;
+  /** El mismo tramo de este mes, truncado en el mismo punto. */
+  conversion_actual: Conteo;
   dias: number;
 };
 
@@ -424,6 +436,8 @@ function armarFila({
     registros_tramo_previo: tramo?.registros ?? null,
     pacientes_nuevos_tramo_previo: tramo?.pacientes_nuevos ?? null,
     pacientes_activos_tramo_previo: tramo?.pacientes_activos ?? null,
+    conversion_tramo: tasaDe(tramo?.conversion_actual),
+    conversion_tramo_previo: tasaDe(tramo?.conversion),
     tramo_dias: tramo?.dias ?? null,
   };
 }
@@ -439,18 +453,29 @@ async function medirTramoPrevio(
 ): Promise<TramoPrevio> {
   const transcurrido = transcurridoEnMes(mes);
   const rango = rangoParcialUtc(mesAnterior(mes), transcurrido);
+  // El mismo tramo, pero de este mes: es contra esto que se compara.
+  const rangoActual = rangoParcialUtc(mes, transcurrido);
 
-  const [reg, nuevos, activos] = await Promise.all([
+  // Tres consultas, tres nombres. Había una cuarta —`pacientesActivados`, que
+  // cuenta primeras sesiones— metida en el medio, así que `activos` se quedaba
+  // con ESA y el resultado de `pacientesActivos` se tiraba. Desestructurar tres
+  // de cuatro es legal, así que el typecheck no dijo nada y la columna quedó
+  // mintiendo: 368 contra los ~1.200 reales de AR. La salvó que la pantalla
+  // nunca la leyera.
+  const [reg, nuevos, activos, convPrevio, convActual] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
-    pacientesActivados(mysql, rango, pais),
     pacientesActivos(mysql, rango, pais),
+    conversionTramo(mysql, rango, pais),
+    conversionTramo(mysql, rangoActual, pais),
   ]);
 
   return {
     registros: reg,
     pacientes_nuevos: nuevos,
     pacientes_activos: activos,
+    conversion: convPrevio,
+    conversion_actual: convActual,
     dias: Math.floor(transcurrido / 86_400_000),
   };
 }
@@ -547,8 +572,32 @@ function armarTotal(
       tramos,
       (t) => t.pacientes_activos,
     ),
+    conversion_tramo: tasaTotal(tramos, (t) => t.conversion_actual),
+    conversion_tramo_previo: tasaTotal(tramos, (t) => t.conversion),
     tramo_dias: Object.values(tramos).find((t) => t)?.dias ?? null,
   };
+}
+
+/** Una tasa desde sus conteos, o null si no hay base. */
+function tasaDe(c: Conteo | undefined): number | null {
+  if (!c || c.registros === 0) return null;
+  return c.convertidos / c.registros;
+}
+
+/**
+ * La tasa de los dos países juntos: convertidos de ambos sobre registros de
+ * ambos. Nunca el promedio de las dos tasas — Uruguay convierte bastante mejor
+ * y pesa la mitad, así que promediarlas no describe a ninguno de los dos.
+ */
+function tasaTotal(
+  tramos: Record<string, TramoPrevio | null>,
+  fn: (t: TramoPrevio) => Conteo,
+): number | null {
+  const presentes = Object.values(tramos).filter((t): t is TramoPrevio => !!t);
+  if (presentes.length === 0) return null;
+  const registros = presentes.reduce((a, t) => a + fn(t).registros, 0);
+  const convertidos = presentes.reduce((a, t) => a + fn(t).convertidos, 0);
+  return registros > 0 ? convertidos / registros : null;
 }
 
 function sumaTramo(
@@ -663,6 +712,8 @@ function filaVacia(
     registros_tramo_previo: null,
     pacientes_nuevos_tramo_previo: null,
     pacientes_activos_tramo_previo: null,
+    conversion_tramo: null,
+    conversion_tramo_previo: null,
     tramo_dias: null,
   };
 }
@@ -680,10 +731,13 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        ltv_usd, cohorte_cerrada,
        churn_rate, es_provisorio, registros_tramo_previo,
        pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
+       conversion_tramo, conversion_tramo_previo,
        tramo_dias, actualizado_en
      ) values (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-       $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, now()
+       $1, $2, $3, $4, $5, $6, $7, $8,
+       $9, $10, $11, $12, $13, $14, $15, $16,
+       $17, $18, $19, $20, $21, $22, $23, $24,
+       $25, $26, $27, $28, $29, $30, $31, now()
      )
      on conflict (mes, pais, plataforma) do update set
        registros = excluded.registros,
@@ -711,6 +765,8 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        registros_tramo_previo = excluded.registros_tramo_previo,
        pacientes_nuevos_tramo_previo = excluded.pacientes_nuevos_tramo_previo,
        pacientes_activos_tramo_previo = excluded.pacientes_activos_tramo_previo,
+       conversion_tramo = excluded.conversion_tramo,
+       conversion_tramo_previo = excluded.conversion_tramo_previo,
        tramo_dias = excluded.tramo_dias,
        actualizado_en = now()`,
     [
@@ -742,6 +798,8 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
       fila.registros_tramo_previo,
       fila.pacientes_nuevos_tramo_previo,
       fila.pacientes_activos_tramo_previo,
+      fila.conversion_tramo,
+      fila.conversion_tramo_previo,
       fila.tramo_dias,
     ],
   );

@@ -773,18 +773,38 @@ puede sostener:
 
 | Card | Pie | Por qué |
 |---|---|---|
-| Pacientes nuevos, Registros | El mismo tramo del mes anterior | Son sumas del mes, así que medio septiembre contra medio agosto compara lo mismo |
-| Pacientes activos, Conversión | Los dos últimos meses **cerrados**, nombrados | Un conteo distinto no se prorratea y una cohorte de 30 días no madura a mitad de mes |
+| Pacientes nuevos, Registros, **Pacientes activos**, **Conversión** | El mismo tramo del mes anterior | La pregunta es cómo viene el mes contra cómo venía el anterior a esta altura |
 | Sesiones por paciente | Diferencia cruda + pendiente debajo | Se mueve de a décimas: "+0,2" dice la cosa, "+4%" la esconde |
 | El resto | Pendiente de 6 meses | Nadie abre la pantalla a preguntar qué pasó un mes puntual |
-
-El pie de activos y conversión **nombra los dos meses** ("ago vs. jul") aunque
-arriba el número grande sea el del mes en curso. Sin eso el delta parecería
-hablar del número que tiene encima, que es otro mes.
 
 Cada unidad se lee en lo suyo y mezclarlas era el error: una tasa se mueve en
 puntos porcentuales —de 9,5% a 9,4% es −0,1 pp, y como relativo sería −1,6%,
 que suena a otra cosa— y un conteo se mueve en porcentaje.
+
+### La conversión del tramo
+
+Registros, pacientes nuevos y activos son sumas o conteos sobre una ventana: el
+valor del mes corriendo YA es el tramo transcurrido, así que alcanza con
+guardar el tramo del mes anterior.
+
+Conversión no. Su valor del mes es la cohorte entera con la ventana fija de 30
+días de §6, y el que se registró ayer tuvo un día de sus treinta: comparar eso
+contra un mes cerrado hace perder al mes en curso por calendario y no por
+conversión. Por eso hay **dos columnas propias**, `conversion_tramo` y
+`conversion_tramo_previo`: la misma definición truncada en el mismo punto de
+observación para los dos meses —registrados del 1 al N que pagaron antes del
+día N— así el que se registró el día N tuvo un día en ambos.
+
+Conserva el tope de 30 días, así que cuando el tramo cubre el mes entero y ya
+pasaron los treinta, `conversion_tramo` y `conversion_cohorte` dan lo mismo. Es
+la misma métrica mirada antes, no otra.
+
+Se llenan **solo en el mes provisorio**. En un mes cerrado quedan nulas, porque
+ahí `conversion_cohorte` ya es la respuesta.
+
+El TOTAL suma convertidos sobre registros de los dos países, nunca promedia las
+dos tasas: Uruguay convierte bastante mejor y pesa la mitad, así que el
+promedio no describiría a ninguno.
 
 ### Reglas de la lectura automática
 

@@ -60,6 +60,7 @@ const VOLUMEN = [
     formato: (n: number | null) => entero(n),
     formatoId: "entero" as const,
     unidad: "pct" as const,
+    contraMesPrevio: true,
     definicion: "Pacientes con al menos una sesión realizada en el mes.",
   },
   {
@@ -69,6 +70,7 @@ const VOLUMEN = [
     formato: (n: number | null) => porcentaje(n),
     formatoId: "porcentaje" as const,
     unidad: "pp" as const,
+    contraMesPrevio: true,
     definicion:
       "De los que se registraron en el mes, cuántos compraron dentro de los 30 días.",
   },
@@ -105,6 +107,7 @@ const ECONOMIA = [
     // Against the month before, not a six-month slope: this drifts by tenths,
     // and a slope over tenths reads as noise.
     contraMesPrevio: true,
+    deltaEnBruto: true,
     definicion:
       "Sesiones realizadas que hace un paciente a lo largo de toda su vida en Tu Terapia, sobre todos los que hicieron al menos una.",
   },
@@ -224,6 +227,15 @@ type Metrica = {
    * number that drifts by tenths, a slope over tenths reads as noise.
    */
   contraMesPrevio?: boolean;
+  /**
+   * Muestra la diferencia cruda en vez de un porcentaje, y agrega el rumbo de
+   * seis meses debajo.
+   *
+   * Es el caso de "sesiones por paciente", que se mueve de a décimas: ahí
+   * "+0,2" dice la cosa misma y "+4%" la esconde. Para un conteo o una tasa el
+   * crudo no sirve —"+127,0" y "+0,0"— así que cada una se lee en su unidad.
+   */
+  deltaEnBruto?: boolean;
   unidad: "pct" | "pp";
   definicion: string;
 };
@@ -445,10 +457,23 @@ function Card({
  * showing: both are null until the cohort closes at ninety days.
  */
 /**
- * How much the number moved since last month, in its own units.
+ * Cuánto se movió desde el mes anterior, en la unidad de la métrica.
  *
- * For a figure that drifts by tenths — the lifetime sessions a patient does —
- * a six-month slope in percent reads as noise. "+0,2" says the thing itself.
+ * Compara los dos últimos meses CERRADOS, no el mes en curso contra el
+ * anterior: medio septiembre contra todo agosto dice que el mes se derrumbó, y
+ * eso solo es cierto del calendario. Por eso el pie nombra los dos meses
+ * —"ago vs. jul"— aunque arriba el número grande sea el de septiembre: si no,
+ * el delta parecería hablar del número que tiene encima.
+ *
+ * Cada unidad se lee distinto y mezclarlas es lo que hacía que esto no
+ * sirviera para todas las métricas:
+ *
+ *  · una tasa se mueve en puntos porcentuales — conversión de 9,5% a 9,4% es
+ *    −0,1 pp, y como porcentaje relativo sería −1,6%, que suena a otra cosa;
+ *  · un conteo se mueve en porcentaje — 1.240 a 1.367 activos es +10%, y en
+ *    crudo sería "+127,0", con una décima que no existe;
+ *  · y lo que se arrastra de a décimas se lee crudo, que es el caso de
+ *    sesiones por paciente y el motivo de `deltaEnBruto`.
  */
 function DeltaMesPrevio({
   serie,
@@ -458,44 +483,93 @@ function DeltaMesPrevio({
   metrica: Metrica;
 }) {
   const cerrados = serie.filter((m) => !m.es_provisorio);
-  const valor = ultimoValor(cerrados, metrica.campo);
-  const previo = ultimoValor(cerrados.slice(0, -1), metrica.campo);
-  if (valor === null || previo === null) return null;
+  const actual = ultimoMesCon(cerrados, metrica.campo);
+  const previo = actual
+    ? ultimoMesCon(cerrados.slice(0, cerrados.indexOf(actual)), metrica.campo)
+    : null;
+  if (!actual || !previo) return null;
 
-  const delta = valor - previo;
+  const valor = metrica.campo(actual)!;
+  const anterior = metrica.campo(previo)!;
+  const movimiento = medir(valor, anterior, metrica);
+  if (movimiento === null) return null;
 
-  // Two different questions, and a month can answer them opposite ways: the
-  // month can fall while the half-year still climbs. The slope says where it
-  // is going, the delta says what just happened.
-  const t = tendencia(
-    cerrados.slice(-MESES_TENDENCIA).map(metrica.campo),
-    metrica.unidad,
-  );
-  const rumbo =
-    t.direccion === "sin_datos"
-      ? null
-      : t.direccion === "creciendo"
-        ? { texto: `subiendo en ${t.meses}m`, tono: "text-forest" }
-        : t.direccion === "bajando"
-          ? { texto: `bajando en ${t.meses}m`, tono: "text-coral" }
-          : { texto: `estable en ${t.meses}m`, tono: "text-sec" };
-
-  const estancado = Math.abs(delta) < 0.05;
-  const uno = Math.abs(delta).toFixed(1).replace(".", ",");
+  const { texto, signo } = movimiento;
+  const tono =
+    signo === 0 ? "text-sec" : signo > 0 ? "text-green" : "text-coral";
+  const flecha = signo === 0 ? "→" : signo > 0 ? "↑" : "↓";
 
   return (
     <>
-      <p
-        className={`mt-1 text-xs ${
-          estancado ? "text-sec" : delta > 0 ? "text-forest" : "text-coral"
-        }`}
-      >
-        {estancado ? "→ igual que" : `${delta > 0 ? "↑ +" : "↓ −"}${uno} vs.`} el
-        mes anterior
+      <p className={`mt-0.5 truncate text-xs ${tono}`}>
+        {flecha} {texto} · {mesCorto(actual.mes)} vs. {mesCorto(previo.mes)}
       </p>
-      {rumbo ? <p className={`text-xs ${rumbo.tono}`}>{rumbo.texto}</p> : null}
+      {/* El rumbo de seis meses solo donde el delta crudo no alcanza para
+          saber si la cosa va a algún lado. En las demás, el mes contra el mes
+          es lo que se pidió y una segunda línea sería justo el "6m" que
+          sobraba. */}
+      {metrica.deltaEnBruto ? <Rumbo serie={cerrados} metrica={metrica} /> : null}
     </>
   );
+}
+
+/**
+ * El movimiento entre dos valores, ya escrito, con su signo.
+ *
+ * Devuelve null cuando no se puede expresar: un porcentaje relativo necesita
+ * una base mayor que cero, y dividir por cero sería inventar un número.
+ */
+function medir(
+  valor: number,
+  anterior: number,
+  metrica: Metrica,
+): { texto: string; signo: number } | null {
+  const conComa = (n: number, decimales: number) =>
+    n.toFixed(decimales).replace(".", ",");
+
+  if (metrica.deltaEnBruto) {
+    const delta = valor - anterior;
+    if (Math.abs(delta) < 0.05) return { texto: "igual", signo: 0 };
+    return {
+      texto: `${delta > 0 ? "+" : "−"}${conComa(Math.abs(delta), 1)}`,
+      signo: Math.sign(delta),
+    };
+  }
+
+  if (metrica.unidad === "pp") {
+    const puntos = (valor - anterior) * 100;
+    if (Math.abs(puntos) < 0.05) return { texto: "igual", signo: 0 };
+    return {
+      texto: `${puntos > 0 ? "+" : "−"}${conComa(Math.abs(puntos), 1)} pp`,
+      signo: Math.sign(puntos),
+    };
+  }
+
+  if (anterior <= 0) return null;
+  const relativo = valor / anterior - 1;
+  if (Math.abs(relativo) < 0.005) return { texto: "igual", signo: 0 };
+  return {
+    texto: `${relativo > 0 ? "+" : "−"}${Math.abs(relativo * 100).toFixed(0)}%`,
+    signo: Math.sign(relativo),
+  };
+}
+
+/** Hacia dónde va, en seis meses cerrados. Debajo del delta, no en su lugar. */
+function Rumbo({ serie, metrica }: { serie: MesSerie[]; metrica: Metrica }) {
+  const t = tendencia(
+    serie.slice(-MESES_TENDENCIA).map(metrica.campo),
+    metrica.unidad,
+  );
+  if (t.direccion === "sin_datos") return null;
+
+  const rumbo =
+    t.direccion === "creciendo"
+      ? { texto: `subiendo en ${t.meses}m`, tono: "text-green" }
+      : t.direccion === "bajando"
+        ? { texto: `bajando en ${t.meses}m`, tono: "text-coral" }
+        : { texto: `estable en ${t.meses}m`, tono: "text-sec" };
+
+  return <p className={`truncate text-xs ${rumbo.tono}`}>{rumbo.texto}</p>;
 }
 
 /**
@@ -531,7 +605,7 @@ function DeltaCard({
   ) {
     const cambio = actual / previo - 1;
     const tono =
-      cambio > 0 ? "text-forest" : cambio < 0 ? "text-coral" : "text-sec";
+      cambio > 0 ? "text-green" : cambio < 0 ? "text-coral" : "text-sec";
     const flecha = cambio > 0 ? "↑" : cambio < 0 ? "↓" : "→";
     return (
       <p className={`mt-0.5 truncate text-xs ${tono}`}>
@@ -579,7 +653,7 @@ function TendenciaTexto({ t, prefijo }: { t: Tendencia; prefijo?: string }) {
 
   const tono =
     t.direccion === "creciendo"
-      ? "text-forest"
+      ? "text-green"
       : t.direccion === "bajando"
         ? "text-coral"
         : "text-sec";
@@ -650,6 +724,24 @@ function aPuntos(serie: MesSerie[], metrica: Metrica) {
     valor: metrica.campo(m),
     enCurso: m.es_provisorio,
   }));
+}
+
+/**
+ * El último mes que TIENE valor para esta métrica, no el último mes a secas.
+ *
+ * Devuelve el mes y no el número porque el pie lo nombra: sin saber de qué mes
+ * es el valor, "vs. el mes anterior" no dice contra qué. Hay métricas que
+ * quedan en null hasta que la cohorte cierra —el LTV a los noventa días— así
+ * que el último mes con dato puede no ser el último mes.
+ */
+function ultimoMesCon(
+  serie: MesSerie[],
+  campo: (m: MesSerie) => number | null,
+): MesSerie | null {
+  for (let i = serie.length - 1; i >= 0; i--) {
+    if (campo(serie[i]!) !== null) return serie[i]!;
+  }
+  return null;
 }
 
 function ultimoValor(

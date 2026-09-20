@@ -766,6 +766,26 @@ El cambio se expresa como el movimiento a lo largo de toda la ventana:
 Hacen falta **al menos 3 meses con dato**; con menos, la card dice "sin datos
 suficientes" en vez de inventar una dirección.
 
+### Qué card muestra qué comparación
+
+No todas muestran la pendiente. Cada una muestra la comparación que su métrica
+puede sostener:
+
+| Card | Pie | Por qué |
+|---|---|---|
+| Pacientes nuevos, Registros | El mismo tramo del mes anterior | Son sumas del mes, así que medio septiembre contra medio agosto compara lo mismo |
+| Pacientes activos, Conversión | Los dos últimos meses **cerrados**, nombrados | Un conteo distinto no se prorratea y una cohorte de 30 días no madura a mitad de mes |
+| Sesiones por paciente | Diferencia cruda + pendiente debajo | Se mueve de a décimas: "+0,2" dice la cosa, "+4%" la esconde |
+| El resto | Pendiente de 6 meses | Nadie abre la pantalla a preguntar qué pasó un mes puntual |
+
+El pie de activos y conversión **nombra los dos meses** ("ago vs. jul") aunque
+arriba el número grande sea el del mes en curso. Sin eso el delta parecería
+hablar del número que tiene encima, que es otro mes.
+
+Cada unidad se lee en lo suyo y mezclarlas era el error: una tasa se mueve en
+puntos porcentuales —de 9,5% a 9,4% es −0,1 pp, y como relativo sería −1,6%,
+que suena a otra cosa— y un conteo se mueve en porcentaje.
+
 ### Reglas de la lectura automática
 
 Se evalúan en orden y gana la primera que se cumple, así que las más

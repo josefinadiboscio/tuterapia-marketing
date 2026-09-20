@@ -145,7 +145,7 @@ function Hero({
   aureola?: { texto: string; titulo: string; tono: "verde" | "coral" };
 }) {
   const colorDe = (t?: "verde" | "coral") =>
-    t === "verde" ? "text-forest" : t === "coral" ? "text-coral" : "text-ter";
+    t === "verde" ? "text-green" : t === "coral" ? "text-coral" : "text-ter";
 
   return (
     <div className="rounded-lg border border-borde bg-surface px-4 py-3">

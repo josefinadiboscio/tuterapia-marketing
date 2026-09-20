@@ -9,8 +9,47 @@ backend de Tu Terapia; las tablas de `marketing.parametros` y
 ## Qué es
 
 Un análisis generado automáticamente después de cada sincronización. El usuario
-no lo pide: entra y ya está. Lee los agregados, encuentra lo que merece
-atención, y recomienda qué hacer.
+no lo pide: entra y ya está. Lee los agregados, encuentra dónde hay para ganar,
+y dice cuál es el próximo movimiento.
+
+---
+
+## Tono: crecimiento, no diagnóstico
+
+El encuadre se orienta a la oportunidad. **Los números no se tocan.**
+
+Una caída se enuncia por lo que hay para recuperar, no por lo que se rompió.
+"El CAC subió 34%" se convierte en "hay US$ 5 por paciente para recuperar en
+Meta". La magnitud real sigue citada en la banda de datos, sin suavizar.
+
+- **Los titulares apuntan a la palanca, no al síntoma**: qué se puede ganar,
+  cuánto y dónde.
+- **Las recomendaciones son el próximo movimiento, no una corrección.** En vez
+  de "bajá el presupuesto de X", "probá mover ese presupuesto a Y y medí dos
+  semanas".
+- **Cuantificá la oportunidad en pacientes o en dólares de margen** cada vez
+  que se pueda. "Si la conversión de esta campaña igualara el promedio de su
+  plataforma, serían 18 pacientes más por mes" vale mucho más que decir que
+  está por debajo.
+- **Nunca escondas un problema.** Si algo empeoró, se dice con su número. Lo
+  que cambia es que se presenta junto a lo que se gana al resolverlo.
+
+### Severidad: tamaño de oportunidad, no alarma
+
+Dos estados y nada más:
+
+| Estado | Color | Cuándo |
+|---|---|---|
+| `alta` | naranja `#E8833F` (`--orange`) | Donde hay más para ganar |
+| `normal` | neutro (`--border` / `--dim`) | El resto |
+
+**El coral no se usa en esta pestaña.** Una pantalla que abre con tres cosas en
+rojo enseña a no abrirla, y esta existe para que se abra. El color vive en el
+borde izquierdo y en la etiqueta, en ningún otro lado.
+
+El orden es por tamaño de oportunidad, no por cuán alarmante suena: 48
+pacientes al mes es `alta` aunque el hallazgo sea aburrido, y 15 es `normal`
+aunque la acción sea más obvia.
 
 ---
 
@@ -66,8 +105,8 @@ inadvertido.
 **Filtro de país arriba** (Total / AR / UY), como el resto de la app. Fecha de
 generación al lado, con la antigüedad cuando pasó más de un día.
 
-**Bloque "Lo más importante hoy"** — uno o dos insights, los de mayor impacto,
-destacados. Pueden cruzar dominios y son los más valiosos: conectan pantallas
+**Bloque "Lo más importante hoy"** — uno o dos insights, los de mayor
+oportunidad, destacados. Pueden cruzar dominios y son los más valiosos: conectan pantallas
 que el usuario mira por separado. En la tabla son `dominio = 'cruce'`.
 
 **Después, por dominio:** General, Ads, Funnel. Uno o dos cada uno como máximo.
@@ -86,24 +125,53 @@ cuando envejecen, se desvían.
 
 | Parte | Columna | Contenido |
 |---|---|---|
-| Titular | `titular` | Una frase, concreta, con la magnitud adentro |
-| Cuerpo | `cuerpo` | Dos o tres oraciones explicando qué se observó |
+| Titular | `titular` | Una frase. Apunta a la palanca, con la magnitud adentro |
+| Cuerpo | `cuerpo` | Dos o tres oraciones. Prosa corta, sin viñetas ni encabezados |
 | Banda de datos | `datos` | Los números con su valor anterior, el actual y su tabla |
-| **Recomendación** | `recomendacion` | Bloque visualmente separado, con su propio encabezado |
+| **Próximo movimiento** | `recomendacion` | Bloque separado, encabezado "Próximo movimiento" |
 | Enlaces | `enlaces` | "Ver en [pestaña]", uno por dominio involucrado |
 | Descartar | `estado` | Acción para no volver a verlo |
 
 **La recomendación va separada del hallazgo, siempre.** El usuario tiene que
 poder aceptar el dato y rechazar la sugerencia sin descartar las dos cosas.
 
-### Severidad, por el borde izquierdo
+La severidad está arriba, en **Tono**: dos estados, naranja y neutro.
 
-- Coral `#E5705A` (`--coral`) — alerta, algo empeoró
-- Verde `#6BAF7A` (`--green`) — oportunidad
-- Neutro — observación
+---
 
-El color vive en el borde y en la etiqueta, en ningún otro lado. Pintar el
-fondo entero de coral convierte una observación en una alarma.
+## Estilo de escritura
+
+Los insights tienen que leerse como si te los contara alguien que conoce el
+negocio, no como salida de un sistema.
+
+- **Frases cortas y directas.** Nada de "se observa que", "cabe destacar", "es
+  importante mencionar".
+- **Nombrá las cosas como las nombra el equipo**: campañas por su UTM, países
+  por su nombre, plata en dólares.
+- **Una idea por oración.** Si hace falta una subordinada para explicarla, se
+  parte en dos.
+- **Sin adjetivos de relleno.** "Significativo", "notable", "considerable" no
+  dicen nada al lado de un número.
+- **Nada de encabezados internos ni viñetas dentro del cuerpo.** Es prosa
+  corta.
+- **Que no arranque siempre igual.** Si los seis insights empiezan con la misma
+  estructura, se lee como plantilla.
+- **Prohibido el condicional vago.** "Podría estar indicando" es "indica" o no
+  se dice.
+
+Lo que no sirve:
+
+> Se observa una variación significativa en el costo de adquisición del canal
+> Meta que podría estar indicando una oportunidad de optimización.
+
+Lo que sí:
+
+> Meta te está costando US$ 5 más por paciente que hace un mes. Si volvés al
+> costo de agosto, son unos US$ 900 de margen al mes.
+
+La diferencia no es de vocabulario. El primero no dice cuánto subió, ni sobre
+qué base, ni qué se gana arreglándolo — tres oraciones de nada. El segundo dice
+el número, la comparación y la plata, en dos.
 
 ---
 
@@ -170,6 +238,10 @@ pestaña.
 - No opina sobre cohortes sin madurez suficiente
 - No menciona pacientes individuales ni datos personales
 - No repite lo que ya dice un gráfico sin agregar una conexión nueva
+- No suaviza un número para que el encuadre positivo cierre: si algo empeoró,
+  la banda de datos lo dice con la magnitud real
+- No usa el condicional para cubrirse — "podría estar indicando" es "indica" o
+  no se dice
 
 ---
 

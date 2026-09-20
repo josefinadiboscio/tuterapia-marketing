@@ -10,25 +10,26 @@ import type { Insight, Severidad } from "@/lib/insights";
  * encabezado. Uno tiene que poder aceptar el dato y rechazar la sugerencia sin
  * descartar las dos cosas.
  *
- * La severidad vive en el borde izquierdo y en ningún otro lado. Pintar el
- * fondo entero de coral convierte una observación en una alarma.
+ * La severidad mide TAMAÑO DE OPORTUNIDAD, no alarma, y por eso son dos
+ * estados y no tres. El naranja marca dónde hay más para ganar; el resto va en
+ * neutro. Acá no hay coral: una pantalla que abre con tres cosas en rojo
+ * enseña a no abrirla, y esta pestaña existe para que se abra.
+ *
+ * El color vive en el borde izquierdo y en la etiqueta, en ningún otro lado.
  */
 const BORDE: Record<Severidad, string> = {
-  alerta: "border-l-coral",
-  oportunidad: "border-l-green",
-  observacion: "border-l-borde",
+  alta: "border-l-orange",
+  normal: "border-l-borde",
 };
 
 const ETIQUETA: Record<Severidad, string> = {
-  alerta: "Alerta",
-  oportunidad: "Oportunidad",
-  observacion: "Observación",
+  alta: "Prioridad alta",
+  normal: "Prioridad normal",
 };
 
 const TONO: Record<Severidad, string> = {
-  alerta: "text-coral",
-  oportunidad: "text-green",
-  observacion: "text-ter",
+  alta: "text-orange",
+  normal: "text-ter",
 };
 
 export function TarjetaInsight({
@@ -48,12 +49,12 @@ export function TarjetaInsight({
             <span className={TONO[insight.severidad]}>
               {ETIQUETA[insight.severidad]}
             </span>
-            {/* Cuando un hallazgo vuelve es porque empeoró, y decirlo cambia
-                cómo se lee: no es lo mismo verlo por primera vez que verlo
-                otra vez y peor. */}
+            {/* Cuando un hallazgo vuelve es porque la oportunidad creció, y
+                decirlo cambia cómo se lee: no es lo mismo verlo por primera vez
+                que verlo otra vez y más grande. */}
             {insight.agravadoDe === null ? null : (
               <span className="rounded-sm bg-warn-bg px-1.5 py-0.5 text-warn">
-                agravado
+                creció
               </span>
             )}
           </p>
@@ -78,6 +79,8 @@ export function TarjetaInsight({
 
       <p className="mt-1.5 text-sm text-sec">{insight.cuerpo}</p>
 
+      {/* La banda de datos lleva la magnitud real, sin suavizar. El encuadre
+          del titular mira la oportunidad; el número dice lo que pasó. */}
       {insight.datos.length > 0 ? (
         <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
           {insight.datos.map((d) => (
@@ -102,7 +105,7 @@ export function TarjetaInsight({
       {insight.recomendacion === null ? null : (
         <div className="mt-3 rounded-md bg-surface-2 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-ter">
-            Recomendación
+            Próximo movimiento
           </p>
           <p className="mt-0.5 text-sm text-texto">{insight.recomendacion}</p>
         </div>

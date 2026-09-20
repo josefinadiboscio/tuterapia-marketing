@@ -21,7 +21,14 @@ export const MAXIMO_DESTACADOS = 2;
 export const DOMINIOS = ["cruce", "general", "ads", "funnel"] as const;
 export type Dominio = (typeof DOMINIOS)[number];
 
-export type Severidad = "alerta" | "oportunidad" | "observacion";
+/**
+ * Tamaño de oportunidad, no nivel de alarma.
+ *
+ * `alta` es donde hay más para ganar y va en naranja. `normal` es el resto.
+ * No hay un tercer estado ni un color de alerta: una pestaña que abre con tres
+ * cosas en rojo enseña a no abrirla, y lo que se busca acá es que se abra.
+ */
+export type Severidad = "alta" | "normal";
 
 export type Dato = {
   etiqueta: string;

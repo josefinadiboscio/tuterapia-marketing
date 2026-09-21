@@ -78,6 +78,25 @@
   --e6: #2c5f5f;
 }
 
+/**
+ * Sesiones vendidas: una familia de color por país, un tono por modalidad.
+ *
+ * Oscuro es online y claro presencial, así el apilado se lee en dos niveles:
+ * de lejos se ve el reparto entre países, de cerca el de modalidad. Los mismos
+ * hex en los dos modos — son identidad, no estado.
+ *
+ * `sin_dato` es la tercera modalidad de hecho: `tipo_session` es nullable en
+ * `pacientes_pagos`. Va en gris porque no es una categoría, es la ausencia de
+ * una, y pintarla de un color propio la haría parecer un producto más.
+ */
+:root {
+  --ses-ar-on: #2f7a7a;
+  --ses-ar-pre: #9ccaca;
+  --ses-uy-on: #d2702b;
+  --ses-uy-pre: #f3be92;
+  --ses-nd: #b9b3a3;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -105,6 +124,11 @@
   --color-e4: var(--e4);
   --color-e5: var(--e5);
   --color-e6: var(--e6);
+  --color-ses-ar-on: var(--ses-ar-on);
+  --color-ses-ar-pre: var(--ses-ar-pre);
+  --color-ses-uy-on: var(--ses-uy-on);
+  --color-ses-uy-pre: var(--ses-uy-pre);
+  --color-ses-nd: var(--ses-nd);
   --color-warn: var(--warn);
   --color-warn-bg: var(--warn-bg);
   --color-danger: var(--danger);

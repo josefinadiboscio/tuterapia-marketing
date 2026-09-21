@@ -13,6 +13,9 @@ import {
   type MetricaSerie,
 } from "@/lib/desglose";
 import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
+import { leerSesiones, DIAS_DE_BARRAS } from "@/lib/sesiones";
+import { GraficoSesiones } from "@/components/grafico-sesiones";
+import { PanelSesiones } from "@/components/panel-sesiones";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
 import {
   entero,
@@ -129,11 +132,17 @@ export default async function General({
 }) {
   const params = await searchParams;
   const ctx = await contexto(params);
-  const [vista, diario, mensual] = await Promise.all([
+  const [vista, diario, mensual, sesiones] = await Promise.all([
     leerGeneral(ctx.pais, ctx.rango),
-    leerDesgloseDiario(ctx.pais, metricaDiaria(params.vol)),
+    leerDesgloseDiario(ctx.pais, metricaDiaria(params.vol), DIAS_DE_BARRAS),
     leerDesgloseMensual(ctx.pais, metricaDiaria(params.vol), ctx.rango),
+    leerSesiones(ctx.pais),
   ]);
+
+  // El mes que titula el panel de ventas: el día local, como todo acá.
+  const mesEnCurso = new Date(Date.now() - 3 * 3_600_000)
+    .toISOString()
+    .slice(0, 7);
 
   const serieVol =
     VOLUMEN.find((m) => m.id === params.vol)?.id ?? VOLUMEN[0].id;
@@ -176,13 +185,28 @@ export default async function General({
                   the cards are pointing at, so a fixed title would lie. */}
               <h2 className="text-xs uppercase tracking-wide text-ter">
                 {VOLUMEN.find((m) => m.id === serieVol)!.nombre} por plataforma ·
-                30 días
+                {" "}{DIAS_DE_BARRAS} días
               </h2>
               <GraficoDiario
                 datos={diario}
                 rate={serieVol === "conversion"}
                 titulo={VOLUMEN.find((m) => m.id === serieVol)!.nombre}
               />
+            </section>
+
+            {/* Sesiones vendidas, al mismo plazo que el gráfico de arriba para
+                que las dos series se lean una contra otra sin recalibrar el
+                ojo. Vendidas, no realizadas: es cuándo entra la plata. */}
+            <section className="mt-8">
+              <h2 className="text-xs uppercase tracking-wide text-ter">
+                Sesiones vendidas por país y modalidad · {DIAS_DE_BARRAS} días
+              </h2>
+              <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start">
+                <div className="flex-1">
+                  <GraficoSesiones vista={sesiones} />
+                </div>
+                <PanelSesiones vista={sesiones} mes={mesEnCurso} />
+              </div>
             </section>
 
             <Bloque

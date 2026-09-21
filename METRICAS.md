@@ -681,6 +681,86 @@ de todo. Es el mismo hallazgo que §6 bis cuenta como "la terapia termina más
 que en ninguna otra parte en la 1ª sesión", visto por cohorte en vez de por
 ventana.
 
+## 6 quater. Sesiones vendidas
+
+**Vendidas, no realizadas.** Son dos hechos distintos y el dashboard guarda los
+dos:
+
+| | Qué mide | Dónde vive |
+|---|---|---|
+| Vendidas | Cuándo se PAGÓ el paquete | `marketing.sesiones_vendidas` |
+| Realizadas | Cuándo OCURRIÓ la sesión | `metricas_diarias.sesiones_realizadas` |
+
+Comparten la palabra "sesiones" y nada más. Una venta es un paquete entero que
+cae completo el día del pago: ocho sesiones compradas un martes son ocho de ese
+martes. La serie diaria es dentada por naturaleza y no se suaviza — es cuándo
+entra la plata.
+
+Es `SUM(pacientes_pagos.sesiones)` sobre pagos con `confirmado = 1` y
+`sesiones > 0`, fechados por **`creacion`**, que es la columna con la que todo
+el resto del proyecto fecha un pago (`PRIMER_PAGO`, conversión, LTV).
+`pacientes_pagos.fecha` sigue sin documentar (§9) y usarla acá pondría estas
+ventas en días distintos que las demás pantallas.
+
+### Modalidad
+
+`pacientes_pagos.tipo_session` es `enum('online','presencial')` y **nullable**,
+así que el agregado guarda una tercera modalidad, `sin_dato`. Medido el
+2026-09-21 sobre los últimos tres meses: **no hay ninguna**. Se conserva el
+camino igual, porque la columna admite nulos y el día que aparezca uno la
+sesión tiene que contarse, no desaparecer.
+
+El reparto de los últimos tres meses:
+
+| País | Modalidad | Sesiones | Parte |
+|---|---|---:|---:|
+| AR | online | 9.273 | 50,1% |
+| UY | online | 5.316 | 28,7% |
+| UY | presencial | 3.391 | 18,3% |
+| AR | presencial | 512 | 2,8% |
+
+Confirma lo de §3: en Argentina presencial es marginal, en Uruguay pesa. En el
+apilado diario la banda de AR presencial es de uno a tres píxeles, y eso es
+honesto — es lo que mide.
+
+### La proyección a fin de mes no es lineal
+
+Medido sobre las últimas 12 semanas, el día de la semana cambia mucho cuánto se
+vende:
+
+| Día | Promedio | Peso |
+|---|---:|---:|
+| Lunes | 347 | 1,52 |
+| Martes | 325 | 1,42 |
+| Miércoles | 275 | 1,20 |
+| Jueves | 254 | 1,11 |
+| Viernes | 206 | 0,90 |
+| Sábado | 82 | 0,36 |
+| Domingo | 112 | 0,49 |
+
+Un sábado vende la cuarta parte que un lunes. Una proyección lineal —lo que va
+del mes sobre los días transcurridos, por los días del mes— erra según qué días
+queden por delante.
+
+El método:
+
+1. De las últimas 8 semanas **completas** (se corta en el último domingo) sale
+   el peso de cada día de la semana. Un día sin ventas cuenta como cero, no
+   como ausente: saltearlo inflaría el peso del fin de semana al doble.
+2. El nivel del mes se mide contra su propio calendario: las ventas hasta hoy
+   divididas por la suma de los pesos de los días transcurridos. Ese es el
+   ritmo del mes, limpio de qué días cayeron.
+3. Los días que faltan se suman con su peso, a ese ritmo.
+
+Con menos de 4 semanas completas cae a lineal **y lo dice en pantalla**: una
+proyección con un patrón inventado sobre dos semanas es peor que una lineal
+honesta.
+
+La barra de progreso se escala al **mayor** entre la proyección y el cierre del
+mes anterior. Escalarla solo a la proyección clava la marca de referencia en el
+extremo cuando el mes anterior cerró más alto, y entonces un mes que viene
+abajo parece empatar.
+
 ## 7. UTMs
 
 Columnas en `login`: `utm_source`, `utm_campaign`, `utm_content`.

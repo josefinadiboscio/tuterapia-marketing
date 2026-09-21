@@ -218,7 +218,9 @@ function proyectar(
   const suma = new Array(7).fill(0);
   const cuenta = new Array(7).fill(0);
   for (let d = inicioDePatron; d <= finDePatron; d = sumarDias(d, 1)) {
-    if (!porDia.has(d) && d < inicioDePatron) continue;
+    // Un día sin ventas cuenta como cero, no como ausente: si se saltearan,
+    // el promedio del sábado se calcularía solo sobre los sábados que
+    // vendieron y el peso del fin de semana saldría el doble de lo que es.
     const dow = diaDeSemana(d);
     suma[dow] += porDia.get(d) ?? 0;
     cuenta[dow] += 1;

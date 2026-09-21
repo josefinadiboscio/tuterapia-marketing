@@ -7,10 +7,11 @@ import {
   registrosPorDiaYSource,
   pacientesNuevosPorDia,
   conversionPorDia,
+  sesionesRealizadasPorDia,
   ultimosDias,
   type PorDia,
 } from "@/lib/queries/diarias";
-import { sesionesPorDiaYModalidad } from "@/lib/queries/sesiones";
+import { sesionesVendidasPorDia } from "@/lib/queries/sesiones";
 import {
   pacientesNuevosPorDiaYSource,
   pacientesActivosPorDiaYSource,
@@ -23,14 +24,14 @@ import { transaction } from "@/lib/db";
 export const DIAS_A_SINCRONIZAR = 45;
 
 /**
- * Las sesiones se guardan sobre una ventana más larga que el resto.
+ * Las ventas se guardan sobre una ventana más larga que el resto.
  *
- * El panel de sesiones necesita el cierre del mes anterior completo y el
- * patrón semanal de varios meses para proyectar. Con 45 días no alcanza
- * ninguno de los dos. Es UNA consulta agrupada que devuelve unos cientos de
- * filas ya reducidas, así que el costo es casi el mismo.
+ * El panel necesita el cierre del mes anterior completo y el patrón semanal de
+ * varios meses para proyectar. Con 45 días no alcanza ninguno de los dos. Es
+ * UNA consulta agrupada que devuelve unos cientos de filas ya reducidas, así
+ * que el costo es casi el mismo.
  */
-export const DIAS_DE_SESIONES = 120;
+export const DIAS_DE_VENTAS = 120;
 
 type FilaDiaria = {
   fecha: string;
@@ -63,13 +64,11 @@ export async function sincronizarDias(
   );
 
   const rango = ultimosDias(dias, ahora);
-  // Una sola consulta para los tres ejes y los 120 días, fuera del loop por
-  // país. De acá salen las dos cosas: el grano con modalidad y la columna
-  // `sesiones_realizadas` de metricas_diarias, que es su suma. Un solo origen,
-  // así que no se pueden contradecir.
-  const sesiones = await sesionesPorDiaYModalidad(
+  // Sesiones VENDIDAS, para el gráfico y el panel de abajo. Una sola consulta
+  // para los tres ejes y los 120 días, fuera del loop por país.
+  const ventas = await sesionesVendidasPorDia(
     mysql,
-    ultimosDias(DIAS_DE_SESIONES, ahora),
+    ultimosDias(DIAS_DE_VENTAS, ahora),
   );
   const filas: FilaDiaria[] = [];
   const totales = new Map<string, FilaDiaria>();
@@ -94,6 +93,7 @@ export async function sincronizarDias(
       nuevosSource,
       activosSource,
       convSource,
+      sesionesDia,
     ] = await Promise.all([
       registrosPorDia(mysql, rango, pais),
       registrosPorDiaYSource(mysql, rango, pais),
@@ -103,18 +103,15 @@ export async function sincronizarDias(
       pacientesNuevosPorDiaYSource(mysql, rango, pais),
       pacientesActivosPorDiaYSource(mysql, rango, pais),
       conversionPorDiaYSource(mysql, rango, pais),
+      sesionesRealizadasPorDia(mysql, rango, pais),
     ]);
 
     const porFecha = indexar(registros);
     const nuevosPorFecha = indexar(nuevos);
-    // El total del día sale de la MISMA consulta que el grano con modalidad,
-    // sumando las tres. Antes era una consulta aparte por país: dos números
-    // para el mismo hecho, que es como empiezan a diferir.
-    const sesionesPorFecha = new Map<string, number>();
-    for (const f of sesiones) {
-      if (f.pais !== pais) continue;
-      sesionesPorFecha.set(f.dia, (sesionesPorFecha.get(f.dia) ?? 0) + f.sesiones);
-    }
+    // Realizadas. NO es lo mismo que el grano de ventas de abajo: una es
+    // cuándo ocurrió la sesión y la otra cuándo se pagó el paquete que la
+    // contiene. Comparten nombre y nada más.
+    const sesionesPorFecha = indexar(sesionesDia);
 
     for (const dia of conversiones) {
       const edad = edadEnDias(dia.dia, ahora);
@@ -250,24 +247,24 @@ export async function sincronizarDias(
     // El grano con modalidad. En bloque y no fila por fila: son unas 700 filas
     // (120 días × 2 países × 3 modalidades) y de a una serían 700 ida y
     // vuelta adentro de una transacción que corre contra un techo de 60s.
-    if (sesiones.length > 0) {
+    if (ventas.length > 0) {
       await db.query(
-        `insert into marketing.sesiones_diarias (fecha, pais, modalidad, sesiones)
+        `insert into marketing.sesiones_vendidas (fecha, pais, modalidad, sesiones)
          select * from unnest($1::date[], $2::text[], $3::text[], $4::int[])
          on conflict (fecha, pais, modalidad) do update set
            sesiones = excluded.sesiones,
            actualizado_en = now()`,
         [
-          sesiones.map((f) => f.dia),
-          sesiones.map((f) => f.pais),
-          sesiones.map((f) => f.modalidad),
-          sesiones.map((f) => f.sesiones),
+          ventas.map((f) => f.dia),
+          ventas.map((f) => f.pais),
+          ventas.map((f) => f.modalidad),
+          ventas.map((f) => f.sesiones),
         ],
       );
     }
   });
 
-  return filas.length + sesiones.length;
+  return filas.length + ventas.length;
 }
 
 function indexar(filas: PorDia[]): Map<string, number> {

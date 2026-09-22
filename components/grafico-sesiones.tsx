@@ -1,5 +1,9 @@
 import { entero, mesCorto } from "@/lib/ui/format";
-import { ETIQUETA_SEGMENTO, RELLENO_SEGMENTO } from "@/lib/sesiones-ui";
+import {
+  ETIQUETA_SEGMENTO,
+  FONDO_SEGMENTO,
+  RELLENO_SEGMENTO,
+} from "@/lib/sesiones-ui";
 import type { VistaSesiones } from "@/lib/sesiones";
 
 /**
@@ -103,7 +107,7 @@ export function GraficoSesiones({ vista }: { vista: VistaSesiones }) {
           <span key={clave} className="flex items-center gap-1.5">
             <span
               className={`inline-block h-2 w-2 rounded-sm ${
-                (RELLENO_SEGMENTO[clave] ?? "fill-ses-nd").replace("fill-", "bg-")
+                FONDO_SEGMENTO[clave] ?? "bg-ses-nd"
               }`}
             />
             {ETIQUETA_SEGMENTO(clave)}

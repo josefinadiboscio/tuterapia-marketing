@@ -1,5 +1,5 @@
 import { entero, porcentaje, nombreDeMes } from "@/lib/ui/format";
-import { ETIQUETA_SEGMENTO, RELLENO_SEGMENTO } from "@/lib/sesiones-ui";
+import { ETIQUETA_SEGMENTO, FONDO_SEGMENTO } from "@/lib/sesiones-ui";
 import type { VistaSesiones } from "@/lib/sesiones";
 
 /**
@@ -87,10 +87,7 @@ export function PanelSesiones({
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span
                     className={`inline-block h-2 w-2 shrink-0 rounded-sm ${
-                      (RELLENO_SEGMENTO[clave] ?? "fill-ses-nd").replace(
-                        "fill-",
-                        "bg-",
-                      )
+                      FONDO_SEGMENTO[clave] ?? "bg-ses-nd"
                     }`}
                   />
                   <span className="truncate text-texto">
@@ -107,10 +104,7 @@ export function PanelSesiones({
               <div className="mt-1 h-1.5 w-full rounded-sm bg-surface-2">
                 <div
                   className={`h-1.5 rounded-sm ${
-                    (RELLENO_SEGMENTO[clave] ?? "fill-ses-nd").replace(
-                      "fill-",
-                      "bg-",
-                    )
+                    FONDO_SEGMENTO[clave] ?? "bg-ses-nd"
                   }`}
                   style={{ width: `${Math.max(1, p.parte * 100)}%` }}
                 />

@@ -2,21 +2,26 @@ import { withDb } from "@/lib/db";
 import { LOCAL_UTC_OFFSET_HOURS } from "@/lib/queries/shared";
 
 /**
- * Los insights publicados.
+ * El análisis semanal publicado.
  *
  * Esta pantalla no analiza nada: lee `marketing.insights` y la dibuja. El
- * análisis corre una vez por día, aparte, después de la sincronización.
+ * análisis corre los lunes a la mañana, aparte, después de la sincronización,
+ * y habla de la semana cerrada anterior.
  *
  * La separación es el punto. Si el generador no corre, el dashboard sigue
- * mostrando los insights de ayer con su fecha a la vista, en vez de quedarse
- * en blanco o —peor— fabricar algo en el momento para tener contenido.
+ * mostrando el análisis de la última semana que sí tuvo, con su período a la
+ * vista, en vez de quedarse en blanco o fabricar algo en el momento para tener
+ * contenido.
+ *
+ * Semanal y no diario porque una pestaña que pide atención todos los días la
+ * gasta. Un tema por semana se lee; seis tarjetas por día se ignoran.
  */
 
-/** Tope duro. Un análisis puede encontrar quince cosas ciertas y triviales. */
-export const MAXIMO = 6;
+/** Un tema principal y, como mucho, tres notas. */
+export const MAXIMO_NOTAS = 3;
 
-/** Como mucho dos en "Lo más importante hoy". */
-export const MAXIMO_DESTACADOS = 2;
+/** Cuántas semanas anteriores lista el archivo. */
+const SEMANAS_DE_ARCHIVO = 12;
 
 export const DOMINIOS = ["cruce", "general", "ads", "funnel"] as const;
 export type Dominio = (typeof DOMINIOS)[number];
@@ -30,6 +35,9 @@ export type Dominio = (typeof DOMINIOS)[number];
  */
 export type Severidad = "alta" | "normal";
 
+/** Qué lugar ocupa en el análisis de la semana. */
+export type Rol = "tema" | "nota";
+
 export type Dato = {
   etiqueta: string;
   antes: string | null;
@@ -42,83 +50,118 @@ export type Enlace = { href: string; texto: string };
 
 export type Insight = {
   id: number;
-  fecha: string;
+  semana: string;
   dominio: Dominio;
   severidad: Severidad;
-  destacado: boolean;
+  rol: Rol;
   titular: string;
   cuerpo: string;
   recomendacion: string | null;
   datos: Dato[];
   enlaces: Enlace[];
-  /** Si vuelve porque empeoró, la vez anterior. */
+  /** Si vuelve porque la oportunidad creció, la vez anterior. */
   agravadoDe: number | null;
 };
 
-export type VistaInsights = {
-  /** El día del análisis que se está mostrando. */
-  fecha: string | null;
-  /** Cuántos días hace que se generó. 0 es hoy. */
-  antiguedadDias: number | null;
-  destacados: Insight[];
-  /** Los demás, agrupados y en el orden de DOMINIOS. */
-  porDominio: { dominio: Dominio; insights: Insight[] }[];
-  /** Total publicado hoy, destacados incluidos. */
-  total: number;
+export type Analisis = {
+  /** Lunes de la semana analizada. */
+  semana: string;
+  /** El domingo que la cierra. */
+  hasta: string;
+  tema: Insight | null;
+  notas: Insight[];
+  /**
+   * Cuántas semanas atrás quedó respecto de la última semana cerrada. 0 es la
+   * que corresponde; 2 quiere decir que hace dos semanas que no se publica.
+   */
+  semanasAtras: number;
 };
 
+export type EnArchivo = {
+  semana: string;
+  hasta: string;
+  titular: string;
+  piezas: number;
+};
+
+export type VistaInsights = {
+  /** El análisis que se está mostrando. */
+  analisis: Analisis | null;
+  /** La semana cerrada que corresponde hoy, haya análisis o no. */
+  semanaCorriente: string;
+  /** Las anteriores, de la más nueva a la más vieja, sin la mostrada. */
+  archivo: EnArchivo[];
+};
+
+/**
+ * El análisis de una semana, o el más reciente que haya.
+ *
+ * `semanaPedida` viene del archivo. Sin ella se muestra el último publicado,
+ * que no siempre es el de la semana que corresponde — y por eso `semanasAtras`
+ * lo dice en vez de dejar que un análisis viejo pase por nuevo.
+ */
 export async function leerInsights(
   pais: string,
+  semanaPedida?: string,
   ahora = new Date(),
 ): Promise<VistaInsights> {
-  const filas = await withDb(async (db) => {
-    // La última fecha CON insights activos de este país, y sus filas.
-    // Dos pasos en una query: sin esto, un día sin novedades devolvería
-    // vacío en vez de lo último que sí se publicó.
-    const { rows } = await db.query<{
-      id: number;
-      fecha: string;
-      dominio: Dominio;
-      severidad: Severidad;
-      destacado: boolean;
-      titular: string;
-      cuerpo: string;
-      recomendacion: string | null;
-      datos: Dato[];
-      enlaces: Enlace[];
-      agravado_de: number | null;
-    }>(
-      `select id, fecha::text, dominio, severidad, destacado,
-              titular, cuerpo, recomendacion, datos, enlaces, agravado_de
-         from marketing.insights
-        where pais = $1
-          and estado = 'activo'
-          and fecha = (
-            select max(fecha) from marketing.insights
-             where pais = $1 and estado = 'activo'
-          )
-        order by destacado desc, severidad, id`,
-      [pais],
-    );
-    return rows;
-  });
+  const semanaCorriente = semanaCerrada(diaLocal(ahora));
 
-  if (filas.length === 0) {
-    return {
-      fecha: null,
-      antiguedadDias: null,
-      destacados: [],
-      porDominio: [],
-      total: 0,
-    };
-  }
+  const { filas, archivo } = await withDb(async (db) => {
+    const [piezas, semanas] = await Promise.all([
+      db.query<{
+        id: number;
+        semana: string;
+        dominio: Dominio;
+        severidad: Severidad;
+        rol: Rol;
+        titular: string;
+        cuerpo: string;
+        recomendacion: string | null;
+        datos: Dato[];
+        enlaces: Enlace[];
+        agravado_de: number | null;
+      }>(
+        `select id, semana::text, dominio, severidad, rol,
+                titular, cuerpo, recomendacion, datos, enlaces, agravado_de
+           from marketing.insights
+          where pais = $1
+            and estado = 'activo'
+            and semana = coalesce(
+              $2::date,
+              (select max(semana) from marketing.insights
+                where pais = $1 and estado = 'activo')
+            )
+          order by (rol = 'tema') desc, severidad, id`,
+        [pais, semanaPedida ?? null],
+      ),
+      // El archivo lista una entrada por semana, con el titular de su tema.
+      // Sin el titular sería una lista de fechas, que no invita a abrir nada.
+      db.query<{
+        semana: string;
+        titular: string | null;
+        piezas: number;
+      }>(
+        `select semana::text,
+                max(titular) filter (where rol = 'tema') as titular,
+                count(*)::int as piezas
+           from marketing.insights
+          where pais = $1 and estado = 'activo'
+          group by semana
+          order by semana desc
+          limit $2`,
+        [pais, SEMANAS_DE_ARCHIVO],
+      ),
+    ]);
+    return { filas: piezas.rows, archivo: semanas.rows };
+  });
 
   const normalizar = (f: (typeof filas)[number]): Insight => ({
     id: f.id,
-    fecha: f.fecha,
+    semana: f.semana,
     dominio: f.dominio,
     severidad: f.severidad,
-    destacado: f.destacado,
+    rol: f.rol,
     titular: f.titular,
     cuerpo: f.cuerpo,
     recomendacion: f.recomendacion,
@@ -127,24 +170,51 @@ export async function leerInsights(
     agravadoDe: f.agravado_de,
   });
 
-  const todos = filas.map(normalizar).slice(0, MAXIMO);
-  const destacados = todos
-    .filter((i) => i.destacado)
-    .slice(0, MAXIMO_DESTACADOS);
-  const resto = todos.filter((i) => !destacados.includes(i));
+  const piezas = filas.map(normalizar);
+  const semana = piezas[0]?.semana ?? null;
 
-  const fecha = filas[0]!.fecha;
+  const analisis: Analisis | null =
+    semana === null
+      ? null
+      : {
+          semana,
+          hasta: sumarDias(semana, 6),
+          tema: piezas.find((p) => p.rol === "tema") ?? null,
+          notas: piezas
+            .filter((p) => p.rol === "nota")
+            .slice(0, MAXIMO_NOTAS),
+          semanasAtras: Math.round(
+            (Date.parse(`${semanaCorriente}T00:00:00Z`) -
+              Date.parse(`${semana}T00:00:00Z`)) /
+              (7 * 86_400_000),
+          ),
+        };
 
   return {
-    fecha,
-    antiguedadDias: diasEntre(fecha, diaLocal(ahora)),
-    destacados,
-    porDominio: DOMINIOS.map((dominio) => ({
-      dominio,
-      insights: resto.filter((i) => i.dominio === dominio),
-    })).filter((g) => g.insights.length > 0),
-    total: todos.length,
+    analisis,
+    semanaCorriente,
+    archivo: archivo
+      .filter((a) => a.semana !== semana)
+      .map((a) => ({
+        semana: a.semana,
+        hasta: sumarDias(a.semana, 6),
+        titular: a.titular ?? "Sin tema principal",
+        piezas: a.piezas,
+      })),
   };
+}
+
+/**
+ * El lunes de la última semana CERRADA.
+ *
+ * El análisis del lunes habla de la semana que terminó ayer, no de la que
+ * empieza hoy. Un lunes a la mañana la semana en curso tiene medio día de
+ * datos, y medio día no es una semana.
+ */
+export function semanaCerrada(hoy: string): string {
+  const dow = new Date(`${hoy}T00:00:00Z`).getUTCDay(); // 0 = domingo
+  const lunesDeEstaSemana = sumarDias(hoy, -(dow === 0 ? 6 : dow - 1));
+  return sumarDias(lunesDeEstaSemana, -7);
 }
 
 /**
@@ -223,6 +293,12 @@ export async function leerPendientes(ahora = new Date()): Promise<Pendientes> {
       sinMapear: sinMapear.rows,
     };
   });
+}
+
+function sumarDias(fecha: string, dias: number): string {
+  return new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
 }
 
 /** Hoy como día calendario local (UTC−3), como todo en este dashboard. */

@@ -1,38 +1,39 @@
-import { Nav, Selectores, contexto } from "@/components/nav";
+import Link from "next/link";
+import { Nav, Selectores, contexto, conContexto } from "@/components/nav";
 import { TarjetaInsight } from "@/components/insight";
-import { leerInsights, leerPendientes, type Dominio } from "@/lib/insights";
+import { leerInsights, leerPendientes, type Analisis } from "@/lib/insights";
 import { fecha as fmtFecha } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 
 /**
- * El análisis del día.
+ * El análisis de la semana.
  *
- * No se pide: se entra y ya está. No hay botón de generar — si hay que
- * apretar algo, no se aprieta, y un análisis a pedido termina siendo un
- * análisis que nadie corre.
+ * No se pide: se entra y ya está. No hay botón de generar — si hay que apretar
+ * algo, no se aprieta, y un análisis a pedido termina siendo un análisis que
+ * nadie corre.
  *
- * Lee `marketing.insights` y nada más. El trabajo lo hizo otro proceso, una
- * vez, después de la sincronización.
+ * Un tema principal y dos o tres notas, sobre la semana cerrada anterior. Lee
+ * `marketing.insights` y nada más: el trabajo lo hizo otro proceso, el lunes a
+ * la mañana, después de la sincronización.
  */
-
-const TITULO_DOMINIO: Record<Dominio, string> = {
-  cruce: "Cruces entre pantallas",
-  general: "General",
-  ads: "Ads",
-  funnel: "Funnel",
-};
-
 export default async function Insights({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const ctx = await contexto(await searchParams);
+  const params = await searchParams;
+  const ctx = await contexto(params);
+  const semanaPedida = /^\d{4}-\d{2}-\d{2}$/.test(params.semana ?? "")
+    ? params.semana
+    : undefined;
+
   const [vista, pendientes] = await Promise.all([
-    leerInsights(ctx.pais),
+    leerInsights(ctx.pais, semanaPedida),
     leerPendientes(),
   ]);
+
+  const { analisis, archivo } = vista;
 
   return (
     <>
@@ -40,50 +41,39 @@ export default async function Insights({
       <Selectores activa="/insights" ctx={ctx} />
 
       <main className="contenedor pb-10 pt-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-xs uppercase tracking-wide text-ter">
-            Lo más importante hoy
-          </h1>
-          {vista.fecha === null ? null : (
-            <p className="text-[11px] text-ter">
-              Análisis del {fmtFecha(vista.fecha)}
-              {vista.antiguedadDias !== null && vista.antiguedadDias > 1
-                ? ` · hace ${vista.antiguedadDias} días`
-                : ""}
-            </p>
-          )}
-        </div>
-
-        {vista.total === 0 ? (
-          <SinNovedades />
+        {analisis === null ? (
+          <SinAnalisis semana={vista.semanaCorriente} />
         ) : (
-          <>
-            <section className="mt-3 space-y-3">
-              {vista.destacados.length === 0 ? (
-                <p className="text-sm text-ter">
-                  Nada se destacó por encima del resto hoy.
-                </p>
-              ) : (
-                vista.destacados.map((i) => (
-                  <TarjetaInsight key={i.id} insight={i} destacado />
-                ))
-              )}
-            </section>
-
-            {vista.porDominio.map((grupo) => (
-              <section key={grupo.dominio} className="mt-8">
-                <h2 className="text-xs uppercase tracking-wide text-ter">
-                  {TITULO_DOMINIO[grupo.dominio]}
-                </h2>
-                <div className="mt-3 space-y-3">
-                  {grupo.insights.map((i) => (
-                    <TarjetaInsight key={i.id} insight={i} />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </>
+          <AnalisisDeLaSemana analisis={analisis} />
         )}
+
+        {archivo.length > 0 ? (
+          <section className="mt-10">
+            <h2 className="text-xs uppercase tracking-wide text-ter">
+              Semanas anteriores
+            </h2>
+            <ul className="mt-3 divide-y divide-borde border-y border-borde">
+              {archivo.map((a) => (
+                <li key={a.semana}>
+                  <Link
+                    href={conContexto("/insights", ctx, { semana: a.semana })}
+                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5 hover:bg-surface"
+                  >
+                    <span className="w-[130px] shrink-0 text-xs tabular-nums text-ter">
+                      {fmtFecha(a.semana)} al {fmtFecha(a.hasta)}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm text-texto">
+                      {a.titular}
+                    </span>
+                    <span className="text-[11px] text-ter">
+                      {a.piezas} {a.piezas === 1 ? "pieza" : "piezas"}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {/* Lo que venía de la pantalla de Admin y no podía desaparecer con
             ella: los valores que se cargan a mano y las cosas que nadie
@@ -149,17 +139,57 @@ export default async function Insights({
   );
 }
 
+function AnalisisDeLaSemana({ analisis }: { analisis: Analisis }) {
+  return (
+    <>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-xs uppercase tracking-wide text-ter">
+          Semana del {fmtFecha(analisis.semana)} al {fmtFecha(analisis.hasta)}
+        </h1>
+        {/* Un análisis viejo tiene que verse viejo. Sin esto, el de hace tres
+            semanas pasa por el de esta. */}
+        {analisis.semanasAtras > 0 ? (
+          <p className="text-[11px] text-coral">
+            {analisis.semanasAtras === 1
+              ? "Es el de la semana pasada: todavía no se publicó el de esta"
+              : `Hace ${analisis.semanasAtras} semanas que no se publica`}
+          </p>
+        ) : null}
+      </div>
+
+      {analisis.tema === null ? null : (
+        <section className="mt-3">
+          <TarjetaInsight insight={analisis.tema} destacado />
+        </section>
+      )}
+
+      {analisis.notas.length > 0 ? (
+        <section className="mt-6">
+          <h2 className="text-xs uppercase tracking-wide text-ter">
+            También esta semana
+          </h2>
+          <div className="mt-3 space-y-3">
+            {analisis.notas.map((n) => (
+              <TarjetaInsight key={n.id} insight={n} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 /**
- * El día sin novedades.
+ * La semana sin novedades.
  *
  * Se dice, no se rellena. Acostumbrar a leer ruido termina en una pestaña que
- * nadie abre, y entonces el día que sí hay algo tampoco se lee.
+ * nadie abre, y entonces la semana que sí hay algo tampoco se lee.
  */
-function SinNovedades() {
+function SinAnalisis({ semana }: { semana: string }) {
   return (
-    <div className="mt-3 rounded-lg border border-borde bg-surface px-4 py-6">
+    <div className="rounded-lg border border-borde bg-surface px-4 py-6">
       <p className="text-sm text-texto">
-        Sin cambios relevantes desde la última revisión.
+        Sin movimientos relevantes en la semana del {fmtFecha(semana)}.
       </p>
       <p className="mt-1 text-xs text-ter">
         Todavía no se publicó ningún análisis para este país.

@@ -8,9 +8,14 @@ backend de Tu Terapia; las tablas de `marketing.parametros` y
 
 ## Qué es
 
-Un análisis generado automáticamente después de cada sincronización. El usuario
-no lo pide: entra y ya está. Lee los agregados, encuentra dónde hay para ganar,
-y dice cuál es el próximo movimiento.
+Un análisis **semanal**, generado automáticamente. El usuario no lo pide: entra
+y ya está. Lee los agregados, encuentra dónde hay para ganar, y dice cuál es el
+próximo movimiento.
+
+**Un análisis por semana, no seis tarjetas por día.** Un tema principal —lo más
+importante de la semana— y dos o tres notas más breves debajo. Una pestaña que
+pide atención todos los días la gasta; una vez por semana, con una sola cosa
+importante, se lee.
 
 ---
 
@@ -86,33 +91,45 @@ Si esto pasa a producción de verdad, el camino es mover la generación a
 `/app/api/cron/insights` con la API de Claude y dejar esta rutina como lo que
 es: una forma de probar sin pagar.
 
-### Estado al 2026-09-19
+### Estado al 2026-09-25
 
-Las seis filas que hay se escribieron a mano en una sesión de Claude Code. La
-rutina diaria **existe pero está deshabilitada**: se creó desde la sesión y no
-quedó con los conectores de Supabase, así que al dispararse no podría ni leer
-los agregados ni escribir la tabla. Para que corra hay que crearla desde la UI
-de rutinas de claude.ai, donde el conector se puede adjuntar.
+Las seis piezas que hay se escribieron a mano en una sesión de Claude Code y se
+migraron a la semana del 14 al 20 de septiembre. La rutina **existe pero está
+deshabilitada**: se creó desde la sesión y no quedó con los conectores de
+Supabase, así que al dispararse no podría ni leer los agregados ni escribir la
+tabla. Para que corra hay que crearla desde la UI de rutinas de claude.ai,
+donde el conector se puede adjuntar. Su cron es `0 11 * * 1` — lunes 8 de la
+mañana de Montevideo, después de la sincronización.
 
-Mientras siga así, los insights se generan a mano o no se generan. La pantalla
-muestra la antigüedad del análisis, que es lo único que evita que eso pase
-inadvertido.
+Mientras siga así, el análisis se genera a mano o no se genera. La pantalla
+dice cuántas semanas hace que no se publica, que es lo único que evita que eso
+pase inadvertido.
 
 ---
 
 ## Estructura de la pantalla
 
-**Filtro de país arriba** (Total / AR / UY), como el resto de la app. Fecha de
-generación al lado, con la antigüedad cuando pasó más de un día.
+**Filtro de país arriba** (Total / AR / UY), como el resto de la app.
 
-**Bloque "Lo más importante hoy"** — uno o dos insights, los de mayor
-oportunidad, destacados. Pueden cruzar dominios y son los más valiosos: conectan pantallas
-que el usuario mira por separado. En la tabla son `dominio = 'cruce'`.
+**El período analizado como título**: "Semana del 14 al 20 de septiembre". Es
+el período, no la fecha en que corrió el job — el análisis del lunes 21 habla
+de la semana que terminó el domingo 20.
 
-**Después, por dominio:** General, Ads, Funnel. Uno o dos cada uno como máximo.
+**El tema de la semana**, una sola tarjeta, grande. Lo más importante que pasó.
 
-**Tope de seis insights en total.** Un modelo puede escribir quince
-observaciones ciertas y triviales; el trabajo es elegir.
+**"También esta semana"**: dos o tres notas más breves.
+
+**Tope de un tema y tres notas.** Un modelo puede escribir quince observaciones
+ciertas y triviales; el trabajo es elegir, y el tope obliga a elegir.
+
+**Semanas anteriores**: el archivo, una fila por semana con su período y el
+titular de su tema, clickeable. Un archivo de fechas sin titular no invita a
+abrir nada.
+
+Si el análisis que se muestra no es el de la semana que corresponde, la
+pantalla lo dice en rojo: *"Hace 2 semanas que no se publica"*. Un análisis
+viejo tiene que verse viejo.
+
 
 Al pie, **Pendientes**: los valores que se cargan a mano y su antigüedad, los
 meses cerrados sin tipo de cambio, y los `utm_source` con volumen sin mapear.
@@ -131,6 +148,7 @@ cuando envejecen, se desvían.
 | **Próximo movimiento** | `recomendacion` | Bloque separado, encabezado "Próximo movimiento" |
 | Enlaces | `enlaces` | "Ver en [pestaña]", uno por dominio involucrado |
 | Descartar | `estado` | Acción para no volver a verlo |
+| Rol | `rol` | `tema` (uno por semana) o `nota` |
 
 **La recomendación va separada del hallazgo, siempre.** El usuario tiene que
 poder aceptar el dato y rechazar la sugerencia sin descartar las dos cosas.
@@ -177,32 +195,57 @@ el número, la comparación y la plata, en dos.
 
 ## Generación
 
-Corre **después del job de sincronización**, una vez por día. Nunca a pedido
-del usuario: si hay que apretar un botón, no se aprieta.
+Corre **los lunes a la mañana**, después del job de sincronización, sobre la
+**semana cerrada anterior** (lunes a domingo). Nunca a pedido del usuario: si
+hay que apretar un botón, no se aprieta.
+
+El lunes a la mañana la semana en curso tiene medio día de datos, y medio día
+no es una semana. Por eso el análisis del lunes 21 habla del 14 al 20.
+
+### Todas las comparaciones son semana contra semana
+
+Ni día contra día, ni mes contra mes: la semana cerrada contra la anterior.
+
+Una comparación diaria sobre una serie con fin de semana dice cualquier cosa
+—un lunes contra un domingo es −70% de puro calendario— y a nivel semanal ese
+ruido se cancela solo.
+
+Cuando un hallazgo solo tiene sentido en una ventana más larga (una tendencia
+de seis meses, una cohorte de funnel), se dice con su ventana explícita en el
+texto. Lo que no se hace es presentar un movimiento mensual como si fuera de la
+semana.
+
 
 ### Deduplicación
 
-Un insight que ya se mostró ayer **no se repite**, salvo que la métrica haya
-empeorado de forma significativa desde entonces. En ese caso se muestra de
-nuevo, con `agravado_de` apuntando a la fila anterior, y la pantalla lo marca.
+Un hallazgo de la semana pasada **no se repite**, salvo que la oportunidad haya
+crecido de forma clara. En ese caso vuelve, con `agravado_de` apuntando a la
+fila anterior, y la pantalla lo marca.
 
-Un insight descartado por el usuario no vuelve a aparecer por 30 días, y si
-reaparece es porque cruzó un umbral peor.
+Un insight descartado por el usuario no vuelve por 30 días, y si reaparece es
+porque cruzó un umbral mayor.
 
 El `hash` es la identidad del **hallazgo**, no de la fila: dos corridas que
-encuentran la misma cosa producen el mismo hash aunque el texto salga
-redactado distinto. El índice único `(fecha, pais, hash)` hace idempotente al
-generador — si corre dos veces el mismo día, no duplica.
+encuentran la misma cosa producen el mismo hash aunque el texto salga redactado
+distinto. El índice único `(semana, pais, hash)` hace idempotente al generador
+— si corre dos veces el mismo lunes, no duplica.
 
-### Días sin novedades
+Un índice único parcial garantiza **un solo `tema` por semana y país**. La
+regla vive en el esquema, no en la confianza de que el prompt se respete.
 
-**Si no hay nada que merezca aparecer, la pestaña lo dice.** No se rellena con
-observaciones triviales para tener contenido.
+
+### Semanas sin novedades
+
+**Si la semana no tuvo movimientos relevantes, la pestaña lo dice.** No se
+rellena con observaciones triviales para tener contenido, y el archivo de
+semanas anteriores sigue ahí.
 
 Es preferible a acostumbrar al usuario a leer ruido y que termine ignorando la
-pestaña.
+pestaña — que con una frecuencia semanal importa más, porque hay menos
+oportunidades de recuperar su atención.
 
 ---
+
 
 ## Qué buscar
 
@@ -247,8 +290,9 @@ pestaña.
 
 ## Pendientes
 
-- [ ] Definir el umbral de "empeoró significativamente" para republicar un
-      insight descartado
+- [ ] Definir el umbral de "creció" para republicar un hallazgo descartado
+- [ ] Decidir qué pasa si una semana se genera tarde: ¿se publica igual con su
+      período, o se saltea?
 - [ ] Decidir si los insights se archivan y son consultables hacia atrás
-- [ ] Evaluar si vale un resumen semanal por mail además de la pestaña
+- [ ] Evaluar si vale mandar el análisis semanal por mail además de la pestaña
 - [ ] Mover la generación a un route handler cuando esto deje de ser una prueba

@@ -62,7 +62,19 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  /*
+   * Los iconos quedan afuera.
+   *
+   * `app/icon.png` y `app/apple-icon.png` los sirve Next como rutas, y el
+   * browser los pide SIN cookie de sesión. Si el middleware los agarra, los
+   * redirige al login y la pestaña se queda sin ícono para siempre — sin
+   * ningún error, porque un 302 a /login es una respuesta perfectamente
+   * válida que simplemente no es una imagen.
+   *
+   * La lista decía `favicon`, que era el nombre viejo de la convención y no
+   * cubre ninguno de los dos archivos que existen.
+   */
   matcher: [
-    "/((?!login|api/login|api/logout|api/cron|_next/static|_next/image|favicon).*)",
+    "/((?!login|api/login|api/logout|api/cron|_next/static|_next/image|favicon|icon\\.png|apple-icon\\.png).*)",
   ],
 };

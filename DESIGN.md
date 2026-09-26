@@ -485,3 +485,27 @@ arriba es el total del día y nada más.
 Si alguna vez el gráfico pasa a más de treinta barras, o los valores a cuatro
 cifras, esto deja de entrar y hay que volver a la regla: eje con un par de
 marcas, y el número directo solo en el máximo.
+
+
+## El ícono de la pestaña
+
+`app/icon.png` y `app/apple-icon.png`: el isotipo de Tu Terapia —los dos globos
+de diálogo— en blanco sobre una teja del naranja de marca, `#E8833F`.
+
+Es el logo original recoloreado, no redibujado. El fondo verde se separó del
+blanco proyectando cada píxel sobre el eje verde→blanco y usando esa posición
+como alfa, en vez de con un umbral duro: el archivo de origen es un JPEG y sus
+bordes están a medio camino entre los dos colores, así que un umbral los habría
+dejado dentados.
+
+**Teja y no logo suelto sobre transparente.** A 16 píxeles —el tamaño real de
+una pestaña— los trazos finos del globo de adelante se pierden en las dos
+versiones, pero con campo sólido queda una silueta reconocible y sin él queda
+una mancha pálida sobre blanco. Se probó a 16, 32 y 64 antes de elegir.
+
+**El middleware tiene que dejarlos pasar.** El browser pide el ícono sin cookie
+de sesión, así que si la puerta los agarra los manda al login y la pestaña se
+queda sin ícono para siempre, sin ningún error: un 302 a `/login` es una
+respuesta válida que simplemente no es una imagen. La lista de exclusiones del
+matcher decía `favicon`, que es el nombre viejo de la convención y no cubre
+ninguno de los dos archivos que Next genera.

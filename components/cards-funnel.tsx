@@ -103,13 +103,13 @@ export function CardSesionesPorPaciente({
 
   const meses =
     p.mesActual && p.mesPrevio
-      ? ` · ${mesCorto(p.mesActual)} vs. ${mesCorto(p.mesPrevio)}`
-      : "";
+      ? `${mesCorto(p.mesActual)} vs. ${mesCorto(p.mesPrevio)}`
+      : null;
 
   return (
     <div
       className="rounded-lg border border-borde bg-surface px-4 py-3"
-      title={`Sesiones realizadas que hace un paciente a lo largo de toda su vida en Tu Terapia, sobre todos los que hicieron al menos una. No se recorta por el período elegido.${meses}`}
+      title="Sesiones realizadas que hace un paciente a lo largo de toda su vida en Tu Terapia, sobre todos los que hicieron al menos una. No se recorta por el período elegido."
     >
       <p className="text-xs text-sec">Sesiones por paciente</p>
       <p className="mt-1 flex items-baseline gap-2">
@@ -127,6 +127,11 @@ export function CardSesionesPorPaciente({
       <p className="mt-0.5 text-[11px] text-ter">
         de por vida, toda la base · ajena al período
       </p>
+      {/* Los dos meses en su propio renglón: pegados al aviso de arriba, la
+          línea se parte y "jul" queda solo abajo. Y tienen que estar, porque
+          el número grande es el del mes en curso y el delta compara los dos
+          cerrados anteriores — sin nombrarlos parecería hablar del 8,7. */}
+      {meses ? <p className="text-[11px] text-ter">{meses}</p> : null}
     </div>
   );
 }
@@ -137,18 +142,29 @@ export function CardSesionesPorPaciente({
  * Crudo y no en porcentaje: esto se arrastra de a décimas, y "+1,2%" sobre 8,7
  * suena a un cambio que no pasó. Es la misma regla que `deltaEnBruto` en
  * General, umbral incluido, así que las dos pestañas dicen lo mismo.
+ *
+ * Lleva flecha, y la flecha no es decoración. Un "−0,2" solo, al lado de dos
+ * cards que dicen "+3,8 pp" y "+2,1 pp", no se lee como un delta: se lee como
+ * un decimal más del 8,7 que tiene al lado. Y más sesiones por paciente es
+ * mejor —al revés que las dos cards de la izquierda, donde el verde es el
+ * número que baja—, así que sin flecha hay que saber de antemano de qué lado
+ * está el bien.
+ *
+ * Y por debajo de media décima dice "igual" en vez de callarse: en Uruguay el
+ * movimiento real es de tres centésimas, y un hueco ahí se lee como un dato
+ * que falta y no como uno que no se movió.
  */
 function DeltaSesiones({ delta }: { delta: number | null }) {
   if (delta === null) return null;
-  // Debajo de media décima se dice "igual" y no se calla: un hueco donde
-  // siempre hay un delta se lee como un dato que falta, no como un dato que no
-  // se movió. General hace lo mismo con el mismo umbral.
   if (Math.abs(delta) < 0.05) {
-    return <span className="text-xs text-sec">igual</span>;
+    return <span className="whitespace-nowrap text-xs text-sec">→ igual</span>;
   }
+  const sube = delta > 0;
   return (
-    <span className={`text-xs ${delta > 0 ? "text-green" : "text-coral"}`}>
-      {delta > 0 ? "+" : "−"}
+    <span
+      className={`whitespace-nowrap text-xs ${sube ? "text-green" : "text-coral"}`}
+    >
+      {sube ? "↑ +" : "↓ −"}
       {Math.abs(delta).toFixed(1).replace(".", ",")}
     </span>
   );

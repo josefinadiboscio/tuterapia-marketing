@@ -555,8 +555,21 @@ Rompe dos reglas de las otras tres cards, y por eso las dice en pantalla:
 
 El delta va contra el **mes cerrado anterior** y en crudo, no en porcentaje:
 esto se arrastra de a décimas y "+1,2%" sobre 8,7 suena a un cambio que no
-pasó. Por debajo de media décima dice "igual". Es la misma regla
-(`deltaEnBruto`) que usa General.
+pasó. Es la misma regla (`deltaEnBruto`) que usa General.
+
+**Lleva flecha, y la flecha no es decoración.** Un "−0,2" solo, al lado de dos
+cards que dicen "+3,8 pp" y "+2,1 pp", se lee como un decimal más del 8,7 que
+tiene pegado, no como un delta. Y acá **más es mejor**, al revés que en las dos
+cards de la izquierda, donde el verde es el número que baja: sin flecha hay que
+saber de antemano de qué lado está el bien.
+
+Por debajo de media décima dice "→ igual" en vez de callarse. No es un caso de
+laboratorio: Uruguay se movió +0,03 entre julio y agosto, así que ahí la card
+dice exactamente eso.
+
+Abajo nombra los dos meses que compara —"ago vs. jul"— porque el número grande
+es el del mes en curso y el delta compara los dos cerrados anteriores. Sin
+nombrarlos, el delta parecería hablar del número que tiene encima.
 
 
 ### Tiempo entre sesiones

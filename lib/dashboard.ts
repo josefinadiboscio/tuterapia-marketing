@@ -189,3 +189,87 @@ function normalizar(fila: Record<string, unknown>): MesSerie {
     conversion_tramo_previo: num(fila.conversion_tramo_previo),
   };
 }
+
+/**
+ * Sessions a patient does over their whole life, one country at a time.
+ *
+ * This is `sesiones_historico`, the same column and the same row General's
+ * "Sesiones por paciente" card reads, because a number that shows up on two
+ * tabs has to come out of one place. It is not `sesiones_por_paciente`, which
+ * is the ninety-day cohort figure that multiplies into the LTV (METRICAS.md
+ * §4): 3,8 against 8,7 in Argentina, and mixing them up would be the kind of
+ * error that looks like a number.
+ *
+ * Never blended across countries. Uruguayan patients stay about half again as
+ * long, so an average of the two describes neither market — which is why this
+ * returns the selected country, or both when the selection is TOTAL, and never
+ * a single total.
+ */
+export type HistoricoPais = {
+  pais: string;
+  valor: number | null;
+  /** Movement against the previous closed month, in sessions. */
+  delta: number | null;
+  mesActual: string | null;
+  mesPrevio: string | null;
+};
+
+export type SesionesHistorico = {
+  /** What the big number shows: the selection, or AR when it is TOTAL. */
+  principal: HistoricoPais | null;
+  /** The other country, only on TOTAL. */
+  otro: HistoricoPais | null;
+};
+
+export async function leerSesionesHistorico(
+  pais: string,
+): Promise<SesionesHistorico> {
+  const paises = pais === "TOTAL" ? [...PAISES_REALES] : [pais];
+
+  return withDb(async (db) => {
+    const { rows } = await db.query<{
+      pais: string;
+      mes: string;
+      sesiones_historico: string;
+      es_provisorio: boolean;
+    }>(
+      `select pais, to_char(mes, 'YYYY-MM') as mes, sesiones_historico,
+              es_provisorio
+         from marketing.metricas_mensuales
+        where pais = any($1) and plataforma = 'TODAS'
+          and sesiones_historico is not null
+          and mes >= (current_date - interval '24 months')
+        order by mes`,
+      [paises],
+    );
+
+    const armar = (p: string): HistoricoPais => {
+      const serie = rows.filter((r) => r.pais === p);
+      const ultimo = serie[serie.length - 1] ?? null;
+
+      // The delta compares the last two CLOSED months, the same rule General
+      // uses: half a month against a whole one moves this number for reasons
+      // that are only the calendar.
+      const cerrados = serie.filter((r) => !r.es_provisorio);
+      const actual = cerrados[cerrados.length - 1] ?? null;
+      const previo = cerrados[cerrados.length - 2] ?? null;
+
+      return {
+        pais: p,
+        valor: ultimo ? Number(ultimo.sesiones_historico) : null,
+        delta:
+          actual && previo
+            ? Number(actual.sesiones_historico) -
+              Number(previo.sesiones_historico)
+            : null,
+        mesActual: actual?.mes ?? null,
+        mesPrevio: previo?.mes ?? null,
+      };
+    };
+
+    return {
+      principal: paises[0] ? armar(paises[0]) : null,
+      otro: paises[1] ? armar(paises[1]) : null,
+    };
+  });
+}

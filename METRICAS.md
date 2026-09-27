@@ -495,26 +495,69 @@ El delta es contra el **período anterior del mismo largo**, en puntos
 porcentuales, sobre "Se quedaron acá". Verde si termina menos gente ahí, ámbar
 si termina más.
 
-### No vuelven tras la 1ª
+### No vuelven tras la 1ª · No vuelven tras la 2ª
 
 ```
-no_vuelven = llegaron[1] − llegaron[2]   (compras hasta hoy − madurez(2))
-pct        = no_vuelven / compradores    (la misma base que la tabla)
+no_vuelven[n] = llegaron[n] − llegaron[n+1]   (compras hasta hoy − madurez(n+1))
+pct[n]        = no_vuelven[n] / compradores[n]  (la misma base que la tabla)
 ```
 
-**La card ES la fila de la 1ª sesión de la tabla**, no otra cuenta de lo mismo.
-Tuvo su propio corte de 30 días y por lo tanto su propio número —333 contra 398
+**Cada card ES una fila de la tabla**, no otra cuenta de lo mismo. La primera
+tuvo su propio corte de 30 días y por lo tanto su propio número —333 contra 398
 en la tabla, el mismo día y el mismo país— que es exactamente lo que este
-proyecto no permite. Ahora hereda `madurez(2)`, 19 días, que es el corte de la
-fila: suficiente para que el comprador mediano haya tenido su primera sesión
-(2 días de mediana) y la segunda (7 más).
+proyecto no permite. Ahora heredan el corte de su fila: `madurez(2)`, 19 días,
+para la 1ª —suficiente para que el comprador mediano haya tenido su primera
+sesión (2 días de mediana) y la segunda (7 más)— y `madurez(3)`, 28 días, para
+la 2ª.
 
-La card muestra la cantidad de personas, el porcentaje sobre compradores, el
+**Las dos no comparten población, y tienen que no compartirla.** Menos
+compradores de la ventana tienen 28 días que 19, así que la segunda card divide
+por una base más chica y corta en un día de compra anterior. Las dos lo dicen
+abajo. Un corte único para las dos quedaría más prolijo y contaría el
+calendario: para saber si alguien se quedó en la segunda hay que darle tiempo a
+una tercera.
+
+Cada card muestra la cantidad de personas, el porcentaje sobre compradores, el
 delta en puntos contra el período anterior, y debajo sobre cuántos compradores
-se calcula y hasta qué fecha de compra.
+se calcula y hasta qué fecha de compra. El delta es **el mismo componente** que
+la columna Δ pp de la tabla, no una copia: verde si termina menos gente ahí,
+ámbar si termina más.
 
-No se llama "caída de 1ª sesión": ese nombre se confunde con los que compran y
+Medido en AR / 90 días el 2026-09-27: **429 personas, 33,2%** sobre 1.291
+compradores en la 1ª; **135 personas, 12,4%** sobre 1.087 en la 2ª. El 12,4%
+coincide con el "12,4% en dos" de la tabla, que es la única forma de saber que
+la card está bien.
+
+No se llaman "caída de 1ª sesión": ese nombre se confunde con los que compran y
 nunca se sientan, que es el escalón *compra → 1ª* de la tabla.
+
+### Sesiones por paciente, en el Funnel
+
+Al lado de las dos cards anteriores va **`sesiones_historico`**, el mismo
+número —y la misma columna de `marketing.metricas_mensuales`— que la card
+"Sesiones por paciente" de General: AR 8,7 · UY 13,6. No es
+`sesiones_por_paciente`, que es el multiplicador del LTV a 90 días (AR 3,8) y
+confundirlos sería el tipo de error que parece un número.
+
+Está ahí porque cierra la historia que cuenta el resto de la pestaña: las dos
+cards de al lado dicen cuánta gente se baja temprano, y esta dice dónde termina
+el promedio cuando se cuenta a todos.
+
+Rompe dos reglas de las otras tres cards, y por eso las dice en pantalla:
+
+- **No se recorta por el período elegido.** Es de por vida, sobre la base
+  entera. El pie dice "ajena al período" para que nadie lea 8,7 como "en los
+  últimos 90 días".
+- **En TOTAL no se promedia**: se muestran los dos países, AR grande y UY
+  abajo, igual que en General. Un paciente uruguayo se queda cerca de una vez y
+  media más que uno argentino; el promedio de los dos no describe a ninguno de
+  los dos mercados.
+
+El delta va contra el **mes cerrado anterior** y en crudo, no en porcentaje:
+esto se arrastra de a décimas y "+1,2%" sobre 8,7 suena a un cambio que no
+pasó. Por debajo de media décima dice "igual". Es la misma regla
+(`deltaEnBruto`) que usa General.
+
 
 ### Tiempo entre sesiones
 

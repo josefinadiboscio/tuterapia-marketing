@@ -12,8 +12,14 @@ import {
   type Profundidad,
 } from "@/lib/funnel-cohorte";
 import { withDb } from "@/lib/db";
+import { leerSesionesHistorico } from "@/lib/dashboard";
 import { usuarioActual } from "@/lib/supabase/servidor";
-import { entero, porcentaje, delta as fmtDelta } from "@/lib/ui/format";
+import { entero } from "@/lib/ui/format";
+import {
+  CardCompradores,
+  CardNoVuelven,
+  CardSesionesPorPaciente,
+} from "@/components/cards-funnel";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +45,11 @@ export default async function Funnel({
   const periodo = leerPeriodo(params.periodo);
   const profundidad = leerProfundidad(params.profundidad);
 
-  const [vista, cohortes, puedeExportar] = await Promise.all([
+  const [vista, cohortes, puedeExportar, historico] = await Promise.all([
     leerFunnel(ctx.pais, periodo),
     leerCohortes(ctx.pais, profundidad, params.cohorte),
     permisoDeExportar(),
+    leerSesionesHistorico(ctx.pais),
   ]);
 
   const extra = {
@@ -77,54 +84,17 @@ export default async function Funnel({
           </span>
         </div>
 
-        <section className="mt-5 grid gap-[10px] md:grid-cols-2">
-          <div className="rounded-lg border border-borde bg-surface px-4 py-3">
-            <p className="text-xs text-sec">Compradores del período</p>
-            <p className="mt-1 flex items-baseline gap-2">
-              <span className="text-2xl text-texto">{entero(vista.compradores)}</span>
-              {vista.deltaCompradores === null ? null : (
-                <span
-                  className={`text-xs ${
-                    vista.deltaCompradores >= 0 ? "text-green" : "text-ambar"
-                  }`}
-                >
-                  {fmtDelta(vista.deltaCompradores, 0)}
-                </span>
-              )}
-            </p>
-          </div>
+        <section className="mt-5 grid gap-[10px] md:grid-cols-4">
+          <CardCompradores
+            compradores={vista.compradores}
+            delta={vista.deltaCompradores}
+          />
 
-          <div className="rounded-lg border border-borde bg-surface px-4 py-3">
-            <p className="text-xs text-sec">No vuelven tras la 1ª</p>
-            {vista.noVuelven === null ? (
-              <p className="mt-1 text-2xl text-texto" />
-            ) : (
-              <>
-                <p className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl text-texto">
-                    {entero(vista.noVuelven.personas)}
-                  </span>
-                  <span className="text-sm text-sec">
-                    {porcentaje(vista.noVuelven.pct)}
-                  </span>
-                  {vista.noVuelven.deltaPp === null ? null : (
-                    <span
-                      className={`text-xs ${
-                        vista.noVuelven.deltaPp < 0 ? "text-green" : "text-ambar"
-                      }`}
-                    >
-                      {vista.noVuelven.deltaPp > 0 ? "+" : "−"}
-                      {Math.abs(vista.noVuelven.deltaPp * 100).toFixed(1)} pp
-                    </span>
-                  )}
-                </p>
-                <p className="mt-0.5 text-[11px] text-ter">
-                  sobre {entero(vista.noVuelven.base)} compradores, hasta compras
-                  del {vista.noVuelven.hasta}
-                </p>
-              </>
-            )}
-          </div>
+          {vista.noVuelven.map((nv) => (
+            <CardNoVuelven key={nv.nro} nv={nv} />
+          ))}
+
+          <CardSesionesPorPaciente historico={historico} />
         </section>
 
         <section className="mt-9">

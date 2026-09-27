@@ -52,11 +52,20 @@ export function madurez(nro: number): number {
 }
 
 /**
- * The no-return card has no clock of its own any more: it is the first-session
- * row of the table, so it inherits `madurez(2)` — nineteen days, enough for
- * the median buyer to have had a first session and a second. It used to carry
- * its own thirty-day cut and therefore its own, different number.
+ * The no-return cards have no clock of their own: each one IS a row of the
+ * table, so each inherits the maturity of the row below it — `madurez(2)`,
+ * nineteen days, for the first session, `madurez(3)`, twenty-eight, for the
+ * second. The first card used to carry its own thirty-day cut and therefore
+ * its own, different number.
+ *
+ * Which means the two cards do NOT share a population: fewer buyers of the
+ * window are twenty-eight days old than nineteen, so the second card divides
+ * by a smaller base and stops at an earlier purchase day. Both say which, and
+ * that is the point — one cut for both would be the calendar talking.
  */
+
+/** The stages that get a card of their own above the table. */
+export const ETAPAS_CON_CARD = [1, 2] as const;
 
 export type FilaEtapa = {
   nro: number;
@@ -88,6 +97,10 @@ export type FilaEtapa = {
 };
 
 export type NoVuelven = {
+  /** The stage they stopped at, which is also the table row this reads. */
+  nro: number;
+  /** The session they did not come back after: "1ª", "2ª". */
+  ordinal: string;
   personas: number;
   pct: number;
   deltaPp: number | null;
@@ -103,7 +116,8 @@ export type VistaFunnel = {
   hasta: string;
   compradores: number;
   deltaCompradores: number | null;
-  noVuelven: NoVuelven | null;
+  /** One card per stage of ETAPAS_CON_CARD, in order. */
+  noVuelven: NoVuelven[];
   etapas: FilaEtapa[];
 };
 
@@ -154,21 +168,31 @@ export async function leerFunnel(
 
     const filas = armarEtapas(actual, anterior, cortes);
 
-    // The card IS the first-session row of the table, not a second
-    // calculation of the same thing. Two numbers for one fact on one screen is
-    // exactly what this project forbids, and it had two: 333 here and 398
-    // there, because this one used its own thirty-day cut.
-    const primera = filas[1];
-    const noVuelven: NoVuelven | null =
-      primera && primera.seQuedaron !== null && primera.pctSeQuedaron !== null
-        ? {
-            personas: primera.seQuedaron,
-            pct: primera.pctSeQuedaron,
-            deltaPp: primera.deltaPp,
-            base: primera.nQuedaron ?? 0,
-            hasta: primera.corteQuedaron ?? hasta,
-          }
-        : null;
+    // Each card IS a row of the table, not a second calculation of the same
+    // thing. Two numbers for one fact on one screen is exactly what this
+    // project forbids, and the first card once had two: 333 here and 398
+    // there, because it used its own thirty-day cut.
+    //
+    // A stage with nothing to say drops its card instead of drawing an empty
+    // one: a box with no number reads as a broken number.
+    const noVuelven: NoVuelven[] = ETAPAS_CON_CARD.flatMap((nro) => {
+      const fila = filas[nro];
+      if (!fila || fila.seQuedaron === null || fila.pctSeQuedaron === null) {
+        return [];
+      }
+      return [
+        {
+          nro,
+          // From the table's own label, so the two can never disagree.
+          ordinal: ETIQUETA_ETAPA[nro]!.split(" ")[0]!,
+          personas: fila.seQuedaron,
+          pct: fila.pctSeQuedaron,
+          deltaPp: fila.deltaPp,
+          base: fila.nQuedaron ?? 0,
+          hasta: fila.corteQuedaron ?? hasta,
+        },
+      ];
+    });
 
     return {
       periodo,

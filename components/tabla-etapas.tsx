@@ -1,3 +1,4 @@
+import { DeltaPp } from "@/components/delta-pp";
 import { entero, porcentaje } from "@/lib/ui/format";
 import type { FilaEtapa } from "@/lib/funnel";
 
@@ -113,19 +114,5 @@ export function TablaEtapas({ filas }: { filas: FilaEtapa[] }) {
         ))}
       </tbody>
     </table>
-  );
-}
-
-/** Less drop is better, so a negative delta is the green one. */
-function DeltaPp({ valor }: { valor: number | null }) {
-  if (valor === null) return null;
-  const puntos = valor * 100;
-  if (Math.abs(puntos) < 0.05) return <span className="text-ter">=</span>;
-  const signo = puntos > 0 ? "+" : "−";
-  return (
-    <span className={puntos < 0 ? "text-green" : "text-ambar"}>
-      {signo}
-      {Math.abs(puntos).toFixed(1)}
-    </span>
   );
 }

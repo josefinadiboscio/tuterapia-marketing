@@ -60,10 +60,19 @@ export function TablaAds({ filas }: { filas: FilaPlataforma[] }) {
   }
 
   return (
-    <table className="mt-6 w-full text-sm">
+    /*
+     * La tabla se sale 12px de cada lado y las celdas de las puntas los
+     * recuperan como padding. Suena al revés y es al revés a propósito: las
+     * filas de "Bajar" y "Apagar" llevan un fondo teñido a todo lo ancho, y sin
+     * esto la palabra "Bajar" quedaba pegada contra el final del color, igual
+     * que el nombre de la plataforma contra el principio. Sangrando la tabla en
+     * vez de meter las celdas hacia adentro, el tinte gana aire y las columnas
+     * siguen alineadas con las cards de arriba.
+     */
+    <table className="-mx-3 mt-6 w-[calc(100%+1.5rem)] text-sm">
       <thead>
         <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-ter">
-          <th className="pb-2 font-normal">Campaña</th>
+          <th className="pb-2 pl-3 font-normal">Campaña</th>
           <th className="pb-2 text-center font-normal">
             Ventas {SEMANAS_DE_TENDENCIA} sem.
           </th>
@@ -72,7 +81,7 @@ export function TablaAds({ filas }: { filas: FilaPlataforma[] }) {
           <th className="pb-2 text-right font-normal">Conv.</th>
           <th className="pb-2 text-right font-normal">CAC</th>
           <th className="pb-2 text-right font-normal">ROAS</th>
-          <th className="pb-2 text-right font-normal">Estado</th>
+          <th className="pb-2 pr-3 text-right font-normal">Estado</th>
         </tr>
       </thead>
 
@@ -84,7 +93,7 @@ export function TablaAds({ filas }: { filas: FilaPlataforma[] }) {
               className={`cursor-pointer ${FONDO[f.estado]}`}
               onClick={() => alternar(f.plataforma)}
             >
-              <td className="py-2">
+              <td className="py-2 pl-3">
                 <div className="flex items-center gap-1.5">
                   <span
                     className={`text-ter transition-transform ${abierta ? "rotate-90" : ""}`}
@@ -119,13 +128,13 @@ export function TablaAds({ filas }: { filas: FilaPlataforma[] }) {
               <td className="py-2 text-right">
                 {f.roas === null ? SIN_DATO : f.roas.toFixed(2).replace(".", ",")}
               </td>
-              <td className={`py-2 text-right ${TONO[f.estado]}`}>
+              <td className={`py-2 pr-3 text-right ${TONO[f.estado]}`}>
                 {ETIQUETA[f.estado]}
               </td>
             </tr>
 
             <tr className={FONDO[f.estado]}>
-              <td colSpan={8} className="pb-2 pl-4 text-xs text-sec">
+              <td colSpan={8} className="pb-2 pl-7 pr-3 text-xs text-sec">
                 {f.lectura}
               </td>
             </tr>
@@ -144,7 +153,7 @@ function Campana({ c }: { c: FilaUtm }) {
   return (
     <>
       <tr className="bg-surface-2/40 text-xs">
-        <td className="py-1.5 pl-8">
+        <td className="py-1.5 pl-11">
           <div className="font-mono text-[11px] text-texto">{c.utm_source}</div>
           <Descripcion utm={c.utm_source} valor={c.descripcion} />
         </td>
@@ -162,12 +171,12 @@ function Campana({ c }: { c: FilaUtm }) {
           {c.roas === null ? SIN_DATO : c.roas.toFixed(2).replace(".", ",")}
           {c.roas === null ? null : <Estimado />}
         </td>
-        <td className={`py-1.5 text-right ${TONO[c.estado]}`}>
+        <td className={`py-1.5 pr-3 text-right ${TONO[c.estado]}`}>
           {ETIQUETA[c.estado]}
         </td>
       </tr>
       <tr className="bg-surface-2/40">
-        <td colSpan={8} className="pb-1.5 pl-8 text-[11px] text-ter">
+        <td colSpan={8} className="pb-1.5 pl-11 pr-3 text-[11px] text-ter">
           {c.lectura}
         </td>
       </tr>

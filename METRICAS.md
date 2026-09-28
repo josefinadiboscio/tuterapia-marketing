@@ -885,6 +885,35 @@ nada en un día suelto.
 - Las filas por plataforma llevan **solo volumen**: una conversión partida por
   plataforma en un día suelto se apoya en un puñado de registros.
 
+### Hasta dónde llega el tráfico por campaña
+
+`marketing.metricas_utm` —el grano por día y `utm_source` que lee Ads— tiene
+datos **desde el 2025-12-01**.
+
+Tuvo 56 días hasta el 2026-09-28, y eso era un problema silencioso. La ventana
+de 45 días del job significa que la tabla arrancó 45 días antes de su primera
+corrida y nunca iba a tener nada anterior. El gasto no tiene ese límite:
+`marketing.gastos_diarios` llega hasta diciembre de 2025. Con las dos tablas de
+largos distintos, **cualquier rango de Ads más largo que el tráfico dividía
+todo el gasto por una fracción de los pacientes**. Noventa días en AR daban un
+CAC de US$ 18,5; con el hueco tapado dan **US$ 12,6**, y los registros del
+mismo rango pasaron de 13.792 a 20.917.
+
+El hueco se tapó con `/api/cron/utm-backfill`, que rellena hacia atrás en
+tramos y busca solo el que falta —el que termina un día antes del primer día
+que ya existe—, así que se lo llama de nuevo hasta que contesta
+`{ listo: true }`. Es upsert sobre la clave primaria: repetir un tramo deja lo
+mismo. **No está en `vercel.json`**: es una operación, no un horario.
+
+Escribe `marketing.metricas_utm` y nada más. El grano diario no se rellena
+hacia atrás a propósito: su conversión proyectada depende de qué edad tiene un
+día **hoy**, así que reescribir días viejos con un job que cree que es agosto
+metería un error nuevo mientras arregla este.
+
+Verificado el 2026-09-28 contra `marketing.metricas_utm_mensual`, que se
+calcula por otro camino: los diez meses coinciden exacto en registros y en
+pacientes nuevos, diferencia cero en los veinte pares mes × país.
+
 ## 7 ter. Tendencia y lectura automática
 
 La tendencia de cada card no es el delta contra el mes anterior: es la

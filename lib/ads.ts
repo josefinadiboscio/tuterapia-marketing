@@ -43,18 +43,19 @@ export type Estado = "escalar" | "mantener" | "bajar" | "apagar" | "sin_dato";
 
 /**
  * Lo que una creatividad consumió DE POR VIDA, según la última lectura que
- * alguien copió del administrador de anuncios, contra lo que devolvió en ese
- * mismo tramo.
+ * alguien copió del administrador de anuncios, y lo que costó cada cosa.
  *
- * Es un dato aparte del CAC de la fila y no lo reemplaza, porque no responden
- * lo mismo. El de la fila es del período elegido y sale de repartir el
- * presupuesto de la plataforma por parte de los registros: una estimación, y
- * por eso lleva `~`. Este es plata declarada contra ventas medidas sobre el
- * mismo tramo: es exacto, y es de toda la vida de la creatividad.
+ * **No lleva veredicto, y es a propósito.** Es un acumulado de meses: adentro
+ * conviven la semana que la creatividad andaba bien y la que se rompió. Decir
+ * "bajala" a partir de un promedio de todo eso sería recomendar sobre un
+ * período que ya pasó, cuando la decisión es sobre el que viene. El escalar y
+ * bajar de la fila sigue saliendo del período elegido, que es lo que se está
+ * mirando.
  *
- * El valor de decidir con esto es que las dos lecturas pueden no coincidir. Una
- * creatividad que consume más de lo que su parte de los registros sugiere se ve
- * sana en la fila y no lo está.
+ * Lo que sí agrega, y la fila no puede: **plata declarada, no repartida.** El
+ * CAC de la fila estima el gasto de la campaña partiendo el presupuesto de la
+ * plataforma según su parte de los registros. Acá el gasto es el que alguien
+ * leyó, así que el costo por registro y el costo por paciente son exactos.
  */
 export type DeVida = {
   /** Lo declarado, y hasta qué día llega esa lectura. */
@@ -62,9 +63,10 @@ export type DeVida = {
   hasta: string;
   registros: number;
   ventas: number;
-  cac: number | null;
-  roas: number | null;
-  estado: Estado;
+  /** Lo que costó traer a alguien al formulario. */
+  costoPorRegistro: number | null;
+  /** Lo que costó que esa persona además pagara. */
+  costoPorPaciente: number | null;
 };
 
 export type FilaUtm = {
@@ -323,17 +325,12 @@ export async function leerAds(
     /**
      * Las lecturas de gasto, sumadas por campaña sobre los países elegidos.
      *
-     * El retorno se acumula país por país y no al final: un paciente uruguayo
-     * vale el doble que uno argentino, así que multiplicar el total de ventas
-     * por un LTV promedio describiría un mercado que no existe. Es la misma
-     * cuenta que hace el retorno del período, arriba.
-     *
      * Si una misma etiqueta tuviera lectura en los dos países con fechas
      * distintas, manda la más vieja: es hasta donde las dos son verdad.
      */
     const deVidaPorSource = new Map<
       string,
-      { gasto: number; hasta: string; registros: number; ventas: number; retorno: number }
+      { gasto: number; hasta: string; registros: number; ventas: number }
     >();
     for (const r of lecturasDeGasto.rows) {
       const acc = deVidaPorSource.get(r.utm_source) ?? {
@@ -341,12 +338,10 @@ export async function leerAds(
         hasta: r.hasta,
         registros: 0,
         ventas: 0,
-        retorno: 0,
       };
       acc.gasto += Number(r.gasto);
       acc.registros += Number(r.registros);
       acc.ventas += Number(r.ventas);
-      acc.retorno += Number(r.ventas) * (LTV_USD[r.pais] ?? 0);
       if (r.hasta < acc.hasta) acc.hasta = r.hasta;
       deVidaPorSource.set(r.utm_source, acc);
     }
@@ -355,19 +350,13 @@ export async function leerAds(
     const deVidaDe = (source: string): DeVida | null => {
       const v = deVidaPorSource.get(source);
       if (!v || v.gasto <= 0) return null;
-      const cac = v.ventas > 0 ? v.gasto / v.ventas : null;
-      const roas = v.ventas > 0 ? v.retorno / v.gasto : null;
       return {
         gasto: v.gasto,
         hasta: v.hasta,
         registros: v.registros,
         ventas: v.ventas,
-        cac,
-        roas,
-        // Sin serie semanal: la regla de apagar mira tres semanas seguidas y
-        // esto es un acumulado sin semanas. Queda en escalar, mantener, bajar
-        // o sin dato, que es todo lo que un total puede decir.
-        estado: estadoDe(roas, v.registros, []),
+        costoPorRegistro: v.registros > 0 ? v.gasto / v.registros : null,
+        costoPorPaciente: v.ventas > 0 ? v.gasto / v.ventas : null,
       };
     };
 

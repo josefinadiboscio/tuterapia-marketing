@@ -178,7 +178,6 @@ function Campana({ c }: { c: FilaUtm }) {
       </tr>
       <tr className="bg-surface-2/40">
         <td colSpan={8} className="pb-1.5 pl-11 pr-3 text-[11px] text-ter">
-          <DeVidaLinea c={c} />
           {c.lectura}
         </td>
       </tr>
@@ -288,9 +287,19 @@ function GastoDeVida({ c }: { c: FilaUtm }) {
           c.deVida ? "text-sec" : "text-ter italic"
         } ${pais ? "hover:text-texto" : "cursor-default"}`}
       >
-        {c.deVida
-          ? `${usd(c.deVida.gasto)} acumulado al ${diaMes(c.deVida.hasta)}`
-          : "+ gasto acumulado"}
+        {c.deVida ? (
+          <>
+            {usd(c.deVida.gasto)} acumulado al {diaMes(c.deVida.hasta)}
+            {c.deVida.costoPorRegistro === null ? null : (
+              <> · {usd(c.deVida.costoPorRegistro, 2)} por registro</>
+            )}
+            {c.deVida.costoPorPaciente === null ? null : (
+              <> · {usd(c.deVida.costoPorPaciente, 1)} por paciente</>
+            )}
+          </>
+        ) : (
+          "+ gasto acumulado"
+        )}
       </button>
     );
   }
@@ -332,32 +341,6 @@ function GastoDeVida({ c }: { c: FilaUtm }) {
         <span className="text-[11px] text-coral">{estado.error}</span>
       ) : null}
     </form>
-  );
-}
-
-/**
- * El veredicto que da el gasto declarado, cuando no es el mismo que el de la
- * fila.
- *
- * Solo aparece cuando los dos difieren, que es el único caso en que agrega
- * algo. Si coinciden, el número de por vida ya está arriba y repetir el
- * veredicto sería ruido.
- *
- * Y difieren por un motivo concreto: el de la fila reparte el presupuesto de
- * la plataforma según la parte de los registros que trajo la campaña, así que
- * una creatividad que consume más de lo que su tráfico sugiere se ve mejor de
- * lo que está.
- */
-function DeVidaLinea({ c }: { c: FilaUtm }) {
-  const v = c.deVida;
-  if (!v || v.roas === null || v.estado === c.estado) return null;
-
-  return (
-    <span className={`${TONO[v.estado]} mr-1`}>
-      De por vida: {usd(v.cac, 1)} de CAC y ROAS{" "}
-      {v.roas.toFixed(2).replace(".", ",")} sobre {entero(v.ventas)} ventas ={" "}
-      {ETIQUETA[v.estado]}, no {ETIQUETA[c.estado].toLowerCase()}.
-    </span>
   );
 }
 

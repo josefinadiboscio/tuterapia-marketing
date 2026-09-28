@@ -1010,28 +1010,33 @@ que hay que calcular antes de cargarlo se carga mal o no se carga.
 De ahí sale el bloque **de por vida** de cada campaña:
 
 ```
-gasto   = la última lectura cargada
-ventas  = pacientes nuevos de esa campaña hasta la fecha de la lectura
-CAC     = gasto / ventas
-ROAS    = Σ (ventas[pais] × LTV_USD[pais]) / gasto
+gasto             = la última lectura cargada
+registros/ventas  = los de esa campaña hasta la fecha de la lectura
+costo por registro = gasto / registros
+costo por paciente = gasto / ventas
 ```
 
-Las ventas se cuentan **hasta la fecha de la lectura**, no hasta hoy: contar
-ventas posteriores abarataría el CAC con plata que esa lectura todavía no
-incluye. El retorno se acumula país por país y no al final, porque un paciente
-uruguayo vale el doble que uno argentino.
+Las ventas y los registros se cuentan **hasta la fecha de la lectura**, no hasta
+hoy: contar los posteriores abarataría los dos costos con plata que esa lectura
+todavía no incluye.
 
-**No reemplaza al CAC de la fila y no se resta del presupuesto de la
-plataforma.** Son dos preguntas distintas: la fila responde por el período
-elegido con gasto repartido, esto responde por toda la vida de la creatividad
-con gasto declarado. Lo que decide es cuando **no coinciden**, y solo entonces
-la fila lo dice: "De por vida: US$ 52,0 de CAC y ROAS 1,15 sobre 323 ventas =
-Bajar, no escalar". Si los dos veredictos coinciden, el número está arriba y la
-línea no aparece.
+**No lleva veredicto, y es a propósito** (decidido el 2026-09-28). Es un
+acumulado de meses: adentro conviven la semana que la creatividad andaba bien y
+la que se rompió. Recomendar escalar o bajar a partir del promedio de todo eso
+sería opinar sobre un período que ya pasó, cuando la decisión es sobre el que
+viene. El escalar y bajar sigue saliendo de la fila, que mira el período
+elegido.
 
-El veredicto de por vida usa los mismos umbrales de §Growth Control, con una
-diferencia: **nunca dice apagar**, porque esa regla mira tres semanas seguidas
-por debajo de 1,0 y un acumulado no tiene semanas.
+Lo que agrega, y la fila no puede: **plata declarada en vez de repartida.** El
+CAC de la fila estima el gasto partiendo el presupuesto de la plataforma según
+la parte de los registros que trajo la campaña, y por eso lleva `~`. Acá el
+gasto es el que alguien leyó del administrador de anuncios, así que los dos
+costos son exactos. Una creatividad que consume más de lo que su tráfico
+sugiere se ve barata en la fila y cara acá, y esa diferencia es el dato.
+
+Tampoco se resta del presupuesto de la plataforma: la fila sigue repartiendo el
+total como antes. Son dos cuentas separadas a propósito, para que cargar una
+lectura no mueva los números de las campañas que no tienen ninguna.
 
 Límite conocido: las ventas salen de `marketing.metricas_utm`, que empieza el
 2025-12-01. Una creatividad que haya corrido antes tendría el gasto completo y

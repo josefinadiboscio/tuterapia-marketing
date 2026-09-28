@@ -991,6 +991,54 @@ específicas van primero. Cada una es una afirmación sobre dos pendientes.
 Si ninguna se cumple, no se muestra ninguna frase. **El tablero no dice nada
 antes que decir algo que no se sostiene.**
 
+### Gasto por creatividad, de por vida
+
+El gasto se declara por plataforma, así que el CAC de una campaña sale de
+**repartir** el presupuesto de la plataforma según la parte de los registros que
+trajo. Es una estimación y lleva `~` en la celda. Sirve para ordenar campañas
+entre sí, y no sirve para saber si una se está comiendo el presupuesto: una
+creatividad que consume más de lo que su tráfico sugiere se ve sana y no lo
+está.
+
+`marketing.gasto_campana` guarda lo que alguien copió del administrador de
+anuncios: **una lectura de odómetro**, no un gasto diario. `acumulado_usd` es lo
+que esa creatividad consumió desde que arrancó hasta `hasta`. Dos lecturas
+seguidas dan, restando, el gasto del tramo entre las dos. Se eligió así porque
+el acumulado está a la vista y se copia sin hacer ninguna cuenta, y un número
+que hay que calcular antes de cargarlo se carga mal o no se carga.
+
+De ahí sale el bloque **de por vida** de cada campaña:
+
+```
+gasto   = la última lectura cargada
+ventas  = pacientes nuevos de esa campaña hasta la fecha de la lectura
+CAC     = gasto / ventas
+ROAS    = Σ (ventas[pais] × LTV_USD[pais]) / gasto
+```
+
+Las ventas se cuentan **hasta la fecha de la lectura**, no hasta hoy: contar
+ventas posteriores abarataría el CAC con plata que esa lectura todavía no
+incluye. El retorno se acumula país por país y no al final, porque un paciente
+uruguayo vale el doble que uno argentino.
+
+**No reemplaza al CAC de la fila y no se resta del presupuesto de la
+plataforma.** Son dos preguntas distintas: la fila responde por el período
+elegido con gasto repartido, esto responde por toda la vida de la creatividad
+con gasto declarado. Lo que decide es cuando **no coinciden**, y solo entonces
+la fila lo dice: "De por vida: US$ 52,0 de CAC y ROAS 1,15 sobre 323 ventas =
+Bajar, no escalar". Si los dos veredictos coinciden, el número está arriba y la
+línea no aparece.
+
+El veredicto de por vida usa los mismos umbrales de §Growth Control, con una
+diferencia: **nunca dice apagar**, porque esa regla mira tres semanas seguidas
+por debajo de 1,0 y un acumulado no tiene semanas.
+
+Límite conocido: las ventas salen de `marketing.metricas_utm`, que empieza el
+2025-12-01. Una creatividad que haya corrido antes tendría el gasto completo y
+las ventas recortadas, y su CAC saldría peor de lo que fue. Las dieciocho
+cargadas el 2026-09-28 arrancan todas en enero de 2026 o después, así que
+ninguna está en ese caso.
+
 ### El gasto se guarda por semana
 
 `marketing.gastos` tiene grano **semanal**: `(semana, pais, canal)`. Es el

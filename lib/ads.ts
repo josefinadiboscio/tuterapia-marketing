@@ -41,6 +41,32 @@ export const PLATAFORMAS_DE_META = ["Meta", "Instagram"];
 
 export type Estado = "escalar" | "mantener" | "bajar" | "apagar" | "sin_dato";
 
+/**
+ * Lo que una creatividad consumió DE POR VIDA, según la última lectura que
+ * alguien copió del administrador de anuncios, contra lo que devolvió en ese
+ * mismo tramo.
+ *
+ * Es un dato aparte del CAC de la fila y no lo reemplaza, porque no responden
+ * lo mismo. El de la fila es del período elegido y sale de repartir el
+ * presupuesto de la plataforma por parte de los registros: una estimación, y
+ * por eso lleva `~`. Este es plata declarada contra ventas medidas sobre el
+ * mismo tramo: es exacto, y es de toda la vida de la creatividad.
+ *
+ * El valor de decidir con esto es que las dos lecturas pueden no coincidir. Una
+ * creatividad que consume más de lo que su parte de los registros sugiere se ve
+ * sana en la fila y no lo está.
+ */
+export type DeVida = {
+  /** Lo declarado, y hasta qué día llega esa lectura. */
+  gasto: number;
+  hasta: string;
+  registros: number;
+  ventas: number;
+  cac: number | null;
+  roas: number | null;
+  estado: Estado;
+};
+
 export type FilaUtm = {
   utm_source: string;
   descripcion: string | null;
@@ -59,6 +85,10 @@ export type FilaUtm = {
   estado: Estado;
   faltanRegistros: number;
   lectura: string;
+  /** Null mientras nadie haya cargado una lectura de gasto para esta campaña. */
+  deVida: DeVida | null;
+  /** En qué países apareció en el período: una lectura se carga por país. */
+  paises: string[];
 };
 
 export type FilaPlataforma = {
@@ -160,6 +190,7 @@ export async function leerAds(
       utm,
       semanal,
       descripciones,
+      lecturasDeGasto,
       pacientesPorPais,
       ventasPrevias,
       gastoPrevio,
@@ -185,11 +216,16 @@ export async function leerAds(
         registros: string;
         ventas: string;
         convertidos: string;
+        paises: string[];
       }>(
+        // `paises` es para poder cargarle una lectura de gasto a la campaña:
+        // una lectura pertenece a un país, porque el LTV con el que se juzga
+        // no es el mismo en los dos.
         `select utm_source,
                   coalesce(sum(registros), 0)::text as registros,
                   coalesce(sum(pacientes_nuevos), 0)::text as ventas,
-                  coalesce(sum(convertidos), 0)::text as convertidos
+                  coalesce(sum(convertidos), 0)::text as convertidos,
+                  array_agg(distinct pais order by pais) as paises
              from marketing.metricas_utm
             where pais = any($3) and fecha >= $1 and fecha <= $2
             group by utm_source`,
@@ -215,6 +251,37 @@ export async function leerAds(
       ),
       db.query<{ utm_source: string; descripcion: string }>(
         "select utm_source, descripcion from marketing.utm_descripcion",
+      ),
+      // La última lectura de gasto de cada campaña, con los registros y las
+      // ventas del MISMO tramo que cubre: si la lectura llega al 28 de
+      // septiembre, las ventas se cuentan hasta el 28 de septiembre. Contar
+      // ventas de después de la lectura abarataría el CAC con plata que esa
+      // lectura todavía no incluye.
+      db.query<{
+        utm_source: string;
+        pais: string;
+        gasto: string;
+        hasta: string;
+        registros: string;
+        ventas: string;
+      }>(
+        `with lectura as (
+           select distinct on (pais, utm_source)
+                  pais, utm_source, acumulado_usd, hasta
+             from marketing.gasto_campana
+            where pais = any($1)
+            order by pais, utm_source, hasta desc
+         )
+         select l.utm_source, l.pais,
+                l.acumulado_usd::text as gasto, l.hasta::text as hasta,
+                coalesce(sum(m.registros), 0)::text as registros,
+                coalesce(sum(m.pacientes_nuevos), 0)::text as ventas
+           from lectura l
+           left join marketing.metricas_utm m
+                  on m.utm_source = l.utm_source and m.pais = l.pais
+                 and m.fecha <= l.hasta
+          group by l.utm_source, l.pais, l.acumulado_usd, l.hasta`,
+        [paises],
       ),
       // New patients split by country: what the period returned is their
       // count times what a patient is worth there, and the two countries are
@@ -253,6 +320,57 @@ export async function leerAds(
       descripciones.rows.map((d) => [d.utm_source, d.descripcion]),
     );
 
+    /**
+     * Las lecturas de gasto, sumadas por campaña sobre los países elegidos.
+     *
+     * El retorno se acumula país por país y no al final: un paciente uruguayo
+     * vale el doble que uno argentino, así que multiplicar el total de ventas
+     * por un LTV promedio describiría un mercado que no existe. Es la misma
+     * cuenta que hace el retorno del período, arriba.
+     *
+     * Si una misma etiqueta tuviera lectura en los dos países con fechas
+     * distintas, manda la más vieja: es hasta donde las dos son verdad.
+     */
+    const deVidaPorSource = new Map<
+      string,
+      { gasto: number; hasta: string; registros: number; ventas: number; retorno: number }
+    >();
+    for (const r of lecturasDeGasto.rows) {
+      const acc = deVidaPorSource.get(r.utm_source) ?? {
+        gasto: 0,
+        hasta: r.hasta,
+        registros: 0,
+        ventas: 0,
+        retorno: 0,
+      };
+      acc.gasto += Number(r.gasto);
+      acc.registros += Number(r.registros);
+      acc.ventas += Number(r.ventas);
+      acc.retorno += Number(r.ventas) * (LTV_USD[r.pais] ?? 0);
+      if (r.hasta < acc.hasta) acc.hasta = r.hasta;
+      deVidaPorSource.set(r.utm_source, acc);
+    }
+
+    /** El bloque de por vida de una campaña, o null si nadie cargó su gasto. */
+    const deVidaDe = (source: string): DeVida | null => {
+      const v = deVidaPorSource.get(source);
+      if (!v || v.gasto <= 0) return null;
+      const cac = v.ventas > 0 ? v.gasto / v.ventas : null;
+      const roas = v.ventas > 0 ? v.retorno / v.gasto : null;
+      return {
+        gasto: v.gasto,
+        hasta: v.hasta,
+        registros: v.registros,
+        ventas: v.ventas,
+        cac,
+        roas,
+        // Sin serie semanal: la regla de apagar mira tres semanas seguidas y
+        // esto es un acumulado sin semanas. Queda en escalar, mantener, bajar
+        // o sin dato, que es todo lo que un total puede decir.
+        estado: estadoDe(roas, v.registros, []),
+      };
+    };
+
     const gastoPlataforma = new Map<string, number>();
     const diasConGasto = new Map<string, number>();
     for (const g of gastos.rows) {
@@ -262,7 +380,12 @@ export async function leerAds(
     const gastoTotal = [...gastoPlataforma.values()].reduce((a, b) => a + b, 0);
 
     // Group the raw sources under the platform their pattern maps to.
-    type Acc = { registros: number; ventas: number; convertidos: number };
+    type Acc = {
+      registros: number;
+      ventas: number;
+      convertidos: number;
+      paises: string[];
+    };
     const porSource = new Map<string, Acc & { plataforma: string }>();
     for (const r of utm.rows) {
       porSource.set(r.utm_source, {
@@ -270,6 +393,7 @@ export async function leerAds(
         registros: Number(r.registros),
         ventas: Number(r.ventas),
         convertidos: Number(r.convertidos),
+        paises: r.paises ?? [],
       });
     }
 
@@ -418,6 +542,8 @@ export async function leerAds(
             tendenciaRoas: serieRoasUtm,
             estado: estadoUtm,
             faltanRegistros: Math.max(0, MUESTRA_MINIMA - v.registros),
+            deVida: deVidaDe(source),
+            paises: v.paises,
             lectura: lecturaDe(estadoUtm, {
               roas: roasUtm,
               conversion: conv,

@@ -124,3 +124,57 @@ export async function leerGastoVigente(): Promise<Vigente[]> {
     );
   });
 }
+
+/**
+ * Una lectura de gasto de una creatividad: lo que consumió DESDE QUE ARRANCÓ
+ * hasta la fecha que se carga.
+ *
+ * Un insert por lectura, nunca un update de la anterior: la lectura del 28 de
+ * septiembre sigue siendo verdad cuando se cargue la del 30 de octubre, y dos
+ * lecturas seguidas dan restando lo que la creatividad gastó en el medio.
+ * Recargar la misma fecha sí pisa, que es corregir un tipeo y no una lectura
+ * nueva.
+ *
+ * Vacío borra la lectura de esa fecha. Cero no: cero es una creatividad que no
+ * consumió nada, y vacío es una que nadie midió. En una pantalla se leen igual
+ * y no son lo mismo.
+ */
+export async function guardarGastoCampana(_previo: unknown, form: FormData) {
+  const utm = String(form.get("utm_source") ?? "").trim();
+  const pais = String(form.get("pais") ?? "").trim();
+  const hasta = String(form.get("hasta") ?? "").trim();
+  const bruto = String(form.get("acumulado") ?? "").trim().replace(",", ".");
+
+  if (utm === "") return { error: "Falta la campaña." };
+  if (!PAISES.includes(pais)) return { error: "País inválido." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return { error: "Fecha inválida." };
+
+  if (bruto === "") {
+    await withDb((db) =>
+      db.query(
+        `delete from marketing.gasto_campana
+          where pais = $1 and utm_source = $2 and hasta = $3`,
+        [pais, utm, hasta],
+      ),
+    );
+    revalidatePath("/ads");
+    return { ok: "Lectura borrada." };
+  }
+
+  const monto = Number(bruto);
+  if (!Number.isFinite(monto) || monto < 0) return { error: "Monto inválido." };
+
+  await withDb((db) =>
+    db.query(
+      `insert into marketing.gasto_campana
+         (pais, utm_source, hasta, acumulado_usd)
+       values ($1, $2, $3, $4)
+       on conflict (pais, utm_source, hasta) do update set
+         acumulado_usd = excluded.acumulado_usd, cargado_en = now()`,
+      [pais, utm, hasta, monto],
+    ),
+  );
+
+  revalidatePath("/ads");
+  return { ok: `Guardado: ${monto} acumulado al ${hasta}.` };
+}

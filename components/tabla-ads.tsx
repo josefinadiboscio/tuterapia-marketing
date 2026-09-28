@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Chispa } from "@/components/chispa";
-import { guardarDescripcion } from "@/app/ads/acciones";
+import { guardarDescripcion, guardarGastoCampana } from "@/app/ads/acciones";
 import { entero, usd, porcentaje, SIN_DATO } from "@/lib/ui/format";
 import { SEMANAS_DE_TENDENCIA } from "@/lib/umbrales";
 import type { Estado, FilaPlataforma, FilaUtm } from "@/lib/ads";
@@ -156,6 +156,7 @@ function Campana({ c }: { c: FilaUtm }) {
         <td className="py-1.5 pl-11">
           <div className="font-mono text-[11px] text-texto">{c.utm_source}</div>
           <Descripcion utm={c.utm_source} valor={c.descripcion} />
+          <GastoDeVida c={c} />
         </td>
         <td className="py-1.5 text-center">
           <Chispa valores={c.tendencia} roas={c.tendenciaRoas} />
@@ -177,6 +178,7 @@ function Campana({ c }: { c: FilaUtm }) {
       </tr>
       <tr className="bg-surface-2/40">
         <td colSpan={8} className="pb-1.5 pl-11 pr-3 text-[11px] text-ter">
+          <DeVidaLinea c={c} />
           {c.lectura}
         </td>
       </tr>
@@ -246,4 +248,120 @@ function Descripcion({ utm, valor }: { utm: string; valor: string | null }) {
       ) : null}
     </form>
   );
+}
+
+/**
+ * Lo que la creatividad consumió de por vida, y el botón para cargarlo.
+ *
+ * Va debajo de la descripción y no en una columna: no es del período que se
+ * está mirando —es de toda la vida de la creatividad— y meterlo entre columnas
+ * que sí lo son lo haría leer como si respondiera a las fechas de arriba.
+ */
+function GastoDeVida({ c }: { c: FilaUtm }) {
+  const [editando, setEditando] = useState(false);
+  const [estado, accion, pendiente] = useActionState(guardarGastoCampana, null);
+
+  // Una lectura pertenece a un país. Con TOTAL puesto y una etiqueta que
+  // aparece en los dos, no hay a cuál cargarla, así que se muestra y no se
+  // edita en vez de adivinar.
+  const pais = c.paises.length === 1 ? c.paises[0]! : null;
+  const hoy = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+
+  if (!editando) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (pais) setEditando(true);
+        }}
+        title={
+          pais
+            ? "Lo que consumió esta creatividad desde que arrancó, copiado del administrador de anuncios"
+            : "Esta etiqueta aparece en los dos países: elegí uno arriba para cargarle el gasto"
+        }
+        // Neutro y no oro: el oro lo usa el resto de la pantalla para marcar
+        // algo que hay que mirar, y una lectura cargada no es una advertencia.
+        // Además en el tema claro quedaba lavado, justo en el número que
+        // alguien se tomó el trabajo de cargar.
+        className={`mt-1 block text-left text-[11px] ${
+          c.deVida ? "text-sec" : "text-ter italic"
+        } ${pais ? "hover:text-texto" : "cursor-default"}`}
+      >
+        {c.deVida
+          ? `${usd(c.deVida.gasto)} acumulado al ${diaMes(c.deVida.hasta)}`
+          : "+ gasto acumulado"}
+      </button>
+    );
+  }
+
+  return (
+    <form
+      action={async (form) => {
+        await accion(form);
+        setEditando(false);
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="mt-1 flex flex-wrap items-center gap-1"
+    >
+      <input type="hidden" name="utm_source" value={c.utm_source} />
+      <input type="hidden" name="pais" value={pais ?? ""} />
+      <span className="text-[11px] text-ter">US$</span>
+      <input
+        name="acumulado"
+        defaultValue={c.deVida ? String(c.deVida.gasto) : ""}
+        autoFocus
+        inputMode="decimal"
+        className="w-20 rounded border border-borde bg-surface px-1.5 py-0.5 text-[11px] text-texto"
+      />
+      <span className="text-[11px] text-ter">acumulado hasta</span>
+      <input
+        type="date"
+        name="hasta"
+        defaultValue={c.deVida?.hasta ?? hoy}
+        className="rounded border border-borde bg-surface px-1.5 py-0.5 text-[11px] text-texto"
+      />
+      <button
+        type="submit"
+        disabled={pendiente}
+        className="text-[11px] text-sec hover:text-texto"
+      >
+        ok
+      </button>
+      {estado && "error" in estado && estado.error ? (
+        <span className="text-[11px] text-coral">{estado.error}</span>
+      ) : null}
+    </form>
+  );
+}
+
+/**
+ * El veredicto que da el gasto declarado, cuando no es el mismo que el de la
+ * fila.
+ *
+ * Solo aparece cuando los dos difieren, que es el único caso en que agrega
+ * algo. Si coinciden, el número de por vida ya está arriba y repetir el
+ * veredicto sería ruido.
+ *
+ * Y difieren por un motivo concreto: el de la fila reparte el presupuesto de
+ * la plataforma según la parte de los registros que trajo la campaña, así que
+ * una creatividad que consume más de lo que su tráfico sugiere se ve mejor de
+ * lo que está.
+ */
+function DeVidaLinea({ c }: { c: FilaUtm }) {
+  const v = c.deVida;
+  if (!v || v.roas === null || v.estado === c.estado) return null;
+
+  return (
+    <span className={`${TONO[v.estado]} mr-1`}>
+      De por vida: {usd(v.cac, 1)} de CAC y ROAS{" "}
+      {v.roas.toFixed(2).replace(".", ",")} sobre {entero(v.ventas)} ventas ={" "}
+      {ETIQUETA[v.estado]}, no {ETIQUETA[c.estado].toLowerCase()}.
+    </span>
+  );
+}
+
+/** '2026-09-28' como '28/09'. */
+function diaMes(fecha: string): string {
+  return `${fecha.slice(8)}/${fecha.slice(5, 7)}`;
 }

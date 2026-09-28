@@ -20,6 +20,7 @@ import {
 import { conversion } from "@/lib/metrics";
 import { resolverPlataforma, type UtmMapping } from "@/lib/utm";
 import { transaction } from "@/lib/db";
+import { armarFilasUtm, type FilaUtm } from "@/lib/sync-utm";
 
 export const DIAS_A_SINCRONIZAR = 45;
 
@@ -74,14 +75,7 @@ export async function sincronizarDias(
   const totales = new Map<string, FilaDiaria>();
   // The campaign grain, kept unaggregated: Ads reads the platform level as the
   // sum of its sources, so both levels come from this one table.
-  const utm: {
-    fecha: string;
-    pais: string;
-    utm_source: string;
-    registros: number | null;
-    nuevos: number | null;
-    convertidos: number | null;
-  }[] = [];
+  const utm: FilaUtm[] = [];
 
   for (const pais of PAISES as readonly Pais[]) {
     const [
@@ -149,37 +143,7 @@ export async function sincronizarDias(
       }
     };
 
-    const crudo = new Map<
-      string,
-      { registros: number | null; nuevos: number | null; convertidos: number | null }
-    >();
-    const tocar = (dia: string, source: string) => {
-      const clave = `${dia}|${source}`;
-      let v = crudo.get(clave);
-      if (!v) {
-        v = { registros: null, nuevos: null, convertidos: null };
-        crudo.set(clave, v);
-      }
-      return v;
-    };
-    for (const f of porSource) tocar(f.dia, f.utm_source).registros = f.n;
-    for (const f of nuevosSource) tocar(f.dia, f.utm_source).nuevos = f.n;
-    for (const f of convSource) {
-      const v = tocar(f.dia, f.utm_source);
-      v.registros = f.registros;
-      v.convertidos = f.convertidos;
-    }
-    for (const [clave, v] of crudo) {
-      const [fecha, source] = clave.split("|");
-      utm.push({
-        fecha: fecha!,
-        pais,
-        utm_source: source!,
-        registros: v.registros,
-        nuevos: v.nuevos,
-        convertidos: v.convertidos,
-      });
-    }
+    utm.push(...armarFilasUtm(pais, porSource, nuevosSource, convSource));
 
     const regPlat = new Map<string, number>();
     const nuevosPlat = new Map<string, number>();

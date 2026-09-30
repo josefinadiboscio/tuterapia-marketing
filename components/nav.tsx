@@ -116,8 +116,14 @@ export async function Nav({
 
       {/* `relative` para que la planta se cuelgue de acá. Está fuera del flujo
           a propósito: cuando era un hijo más, su alto decidía el alto de la
-          barra y separaba las pestañas del título. */}
-      <nav className="contenedor relative flex items-end gap-5 pt-3 text-sm">
+          barra y separaba las pestañas del título.
+      
+          El pt-6 es el aire de la planta, no del diseño: ella cuelga de la
+          línea hacia arriba y arriba está el sello de sincronización. Con
+          pt-3 el hueco bajo el título era de 13px y las hojas quedaban
+          rozando el "salir"; acá son 25px, todavía la mitad de los 48 que
+          había cuando el hueco lo ponían las mascotas. */}
+      <nav className="contenedor relative flex items-end gap-5 pt-6 text-sm">
         {PESTANAS.map((p) => (
           <Link
             key={p.href}

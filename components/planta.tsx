@@ -37,6 +37,15 @@ export function Planta({ frases }: { frases: string[] }) {
   const plantaRef = useRef<HTMLDivElement>(null);
   const follajeRef = useRef<SVGGElement>(null);
   const globoRef = useRef<HTMLDivElement>(null);
+  /**
+   * Para poder apretarla y que diga algo.
+   *
+   * `hablar` vive adentro del efecto, que es donde están el estado y los
+   * temporizadores. El ref es el único puente hacia el onClick sin sacar todo
+   * eso afuera y convertirlo en estado de React, que es justo lo que este
+   * componente evita.
+   */
+  const hablarRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const carril = carrilRef.current;
@@ -167,8 +176,8 @@ export function Planta({ frases }: { frases: string[] }) {
       // bajarlo de vuelta o el tallo se despega de la maceta al respirar.
       follaje!.setAttribute(
         "transform",
-        `translate(0 ${(21 * (1 - respira)).toFixed(3)}) ` +
-          `rotate(${hojas} 20 21) scale(1 ${respira.toFixed(4)})`,
+        `translate(0 ${(26 * (1 - respira)).toFixed(3)}) ` +
+          `rotate(${hojas} 22 26) scale(1 ${respira.toFixed(4)})`,
       );
 
       if (globo!.classList.contains("visible")) colocarGlobo(izq);
@@ -176,12 +185,21 @@ export function Planta({ frases }: { frases: string[] }) {
       cuadro = requestAnimationFrame(dibujar);
     }
 
-    const reloj = setInterval(hablar, CADA_MS);
+    let reloj = setInterval(hablar, CADA_MS);
+
+    // Apretarla cuenta como que habló: si no, decía lo suyo y a los dos
+    // segundos volvía a hablar sola porque el reloj seguía donde estaba.
+    hablarRef.current = () => {
+      hablar();
+      clearInterval(reloj);
+      reloj = setInterval(hablar, CADA_MS);
+    };
     parpadear();
     cuadro = requestAnimationFrame(dibujar);
     temporizadores.push(setTimeout(hablar, 4_000));
 
     return () => {
+      hablarRef.current = null;
       cancelAnimationFrame(cuadro);
       clearInterval(reloj);
       clearTimeout(cierreGlobo);
@@ -206,49 +224,50 @@ export function Planta({ frases }: { frases: string[] }) {
     <div
       ref={carrilRef}
       aria-hidden="true"
-      className="pointer-events-none absolute bottom-0 right-6 hidden h-11 w-[150px] min-[1100px]:block"
+      className="pointer-events-none absolute bottom-0 right-6 hidden h-[46px] w-[150px] min-[1100px]:block"
     >
       {/*
-       * Baja y ancha, no alta y flaca.
+       * La maceta se lleva menos de la mitad del alto.
        *
-       * Desde la línea hasta el sello de sincronización hay 41px y nada más, y
-       * la planta cuelga de la línea hacia arriba. Con la silueta alta las
-       * hojas le crecían por encima del "salir". Achicar esa misma silueta no
-       * servía: la carita vive en la maceta y se volvía un borrón.
+       * La primera versión tenía la maceta grande para que entrara la carita
+       * en los 41px que había, y se veía lo que era: mucha maceta y poca
+       * planta. Ahora la barra da 24px más de aire, y ese aire se lo lleva
+       * entero el follaje: tres hojas más largas y más abiertas sobre una
+       * maceta más angosta.
        *
-       * Así que la maceta se lleva más de la mitad del alto y las hojas son
-       * cortas. Entra en el hueco y la cara se sigue leyendo, que es lo único
-       * que esta cosa tiene que lograr.
+       * La cara no se achicó. Es lo único que esta cosa tiene que lograr y
+       * sigue midiendo lo mismo sobre una maceta más chica.
        */}
       <div
         ref={plantaRef}
-        className="planta absolute bottom-0 left-0 w-[40px] origin-bottom will-change-transform"
+        onClick={() => hablarRef.current?.()}
+        className="planta pointer-events-auto absolute bottom-0 left-0 w-[44px] cursor-pointer origin-bottom will-change-transform"
       >
-        <svg viewBox="0 0 40 44" width="40" height="44" className="block overflow-visible">
+        <svg viewBox="0 0 44 46" width="44" height="46" className="block overflow-visible">
           {/* Las burbujitas de meditar. */}
           <g className="planta-aura">
-            <circle cx="31" cy="14" r="1.5" />
-            <circle cx="34" cy="12" r="1.2" />
-            <circle cx="30" cy="10" r="1" />
+            <circle cx="33" cy="8" r="1.5" />
+            <circle cx="36" cy="6" r="1.2" />
+            <circle cx="32" cy="4" r="1" />
           </g>
 
-          <path className="planta-tierra" d="M8 21 L32 21 L29 43 L11 43 Z" />
-          <path className="planta-maceta" d="M8 21 L32 21 L29 43 L11 43 Z" />
-          <path className="planta-maceta" d="M6 21 L34 21" />
+          <path className="planta-tierra" d="M11 26 L33 26 L30 45 L14 45 Z" />
+          <path className="planta-maceta" d="M11 26 L33 26 L30 45 L14 45 Z" />
+          <path className="planta-maceta" d="M9 26 L35 26" />
 
-          {/* La carita, sobre la maceta. Es lo más grande del dibujo. */}
-          <circle className="planta-ojo" cx="15.5" cy="30" r="2" />
-          <circle className="planta-ojo" cx="24.5" cy="30" r="2" />
-          <path className="planta-ojo-cerrado" d="M13.2 30 Q15.5 32.4 17.8 30" />
-          <path className="planta-ojo-cerrado" d="M22.2 30 Q24.5 32.4 26.8 30" />
-          <path className="planta-boca" d="M16.6 35.4 Q20 38.2 23.4 35.4" />
-          <path className="planta-boca-zen" d="M17 36.4 L23 36.4" />
+          {/* La carita, sobre la maceta. */}
+          <circle className="planta-ojo" cx="17.5" cy="33" r="2" />
+          <circle className="planta-ojo" cx="26.5" cy="33" r="2" />
+          <path className="planta-ojo-cerrado" d="M15.2 33 Q17.5 35.4 19.8 33" />
+          <path className="planta-ojo-cerrado" d="M24.2 33 Q26.5 35.4 28.8 33" />
+          <path className="planta-boca" d="M18.6 38.2 Q22 41 25.4 38.2" />
+          <path className="planta-boca-zen" d="M19 39.2 L25 39.2" />
 
           <g ref={follajeRef}>
-            <path className="planta-tallo" d="M20 21 C20 16 20 12 20 9" />
-            <path className="planta-hoja" d="M20 15 C15 14.4 11 11.6 10.4 7.2 C14.8 6.6 18.6 9.4 19.4 13.6" />
-            <path className="planta-hoja" d="M20 12 C25 11.4 29 8.6 29.6 4.2 C25.2 3.6 21.4 6.4 20.6 10.6" />
-            <path className="planta-hoja" d="M20 9.6 C18.8 5.6 19.6 1.8 22.4 0 C24.2 2.6 23.6 6.6 20.8 8.8" />
+            <path className="planta-tallo" d="M22 26 C22 21 22 16 22 12" />
+            <path className="planta-hoja" d="M22 22 C15 21 9 16.5 8 9.5 C15 8.5 21 13 22 20" />
+            <path className="planta-hoja" d="M22 17.5 C29 16.5 35 12 36 5 C29 4 23 8.5 22 15.5" />
+            <path className="planta-hoja" d="M22 13 C20 7 21 2 24.5 0 C27.5 3 26.5 8 23 12" />
           </g>
         </svg>
       </div>

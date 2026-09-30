@@ -152,19 +152,160 @@ body {
 }
 
 /**
- * Las mascotas están dibujadas con trazo azul marino, que sobre el fondo verde
- * casi negro del modo oscuro desaparece. Invertir y girar el tono 180° sube el
- * trazo a un crema claro y le devuelve al naranja su lugar, en vez de dejarlo
- * celeste como haría una inversión sola.
+ * La planta del header.
  *
- * En claro no se toca: el original está hecho para fondo crema.
+ * Reemplazó a las cuatro mascotas, que eran PNG dibujados en azul marino y
+ * necesitaban `filter: invert(1) hue-rotate(180deg)` para sobrevivir al modo
+ * oscuro. Un SVG toma el color de los tokens y no necesita el truco.
+ *
+ * El trazo es el color del texto y la maceta el naranja oscuro de la marca.
  */
-.mascota {
-  filter: invert(1) hue-rotate(180deg);
+.planta-maceta {
+  fill: none;
+  stroke: var(--orange-dk);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-:root[data-theme="light"] .mascota {
-  filter: none;
+.planta-tierra {
+  fill: var(--orange-dk);
+  opacity: 0.14;
+  stroke: none;
+}
+
+.planta-tallo,
+.planta-hoja {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.planta-ojo {
+  fill: var(--text);
+  stroke: none;
+}
+
+.planta-ojo-cerrado,
+.planta-boca,
+.planta-boca-zen {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* Despierta: ojos abiertos y sonrisa. Meditando: ojos cerrados y boca serena.
+   Las dos caras están siempre en el SVG y se muestra una; así el cambio de
+   estado es una clase y no volver a dibujar nada. */
+.planta-ojo-cerrado,
+.planta-boca-zen,
+.planta-aura {
+  display: none;
+}
+
+.planta.medita .planta-ojo,
+.planta.medita .planta-boca {
+  display: none;
+}
+
+.planta.medita .planta-ojo-cerrado,
+.planta.medita .planta-boca-zen,
+.planta.medita .planta-aura {
+  display: inline;
+}
+
+/* El parpadeo es la cara cerrada por 130ms, nada más. */
+.planta.parpadea .planta-ojo {
+  display: none;
+}
+
+.planta.parpadea .planta-ojo-cerrado {
+  display: inline;
+}
+
+.planta-aura circle {
+  fill: var(--text);
+  opacity: 0;
+}
+
+.planta.medita .planta-aura circle {
+  animation: planta-subir 3.6s ease-out infinite;
+}
+
+.planta.medita .planta-aura circle:nth-child(2) {
+  animation-delay: 1.2s;
+}
+
+.planta.medita .planta-aura circle:nth-child(3) {
+  animation-delay: 2.4s;
+}
+
+@keyframes planta-subir {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  22% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-16px) scale(1);
+  }
+}
+
+/* El globo va a la IZQUIERDA de la planta, no arriba: arriba están el sello de
+   sincronización, el usuario y el toggle de tema, y les caería encima. */
+.planta-globo {
+  position: absolute;
+  bottom: 14px;
+  white-space: nowrap;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 7px 11px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 260ms ease,
+    transform 260ms ease;
+  pointer-events: none;
+}
+
+.planta-globo.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* La colita, apuntando a la planta. */
+.planta-globo::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  bottom: 9px;
+  width: 8px;
+  height: 8px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planta-globo {
+    transition: none;
+  }
+
+  .planta.medita .planta-aura circle {
+    animation: none;
+    opacity: 0.35;
+  }
 }
 
 /**

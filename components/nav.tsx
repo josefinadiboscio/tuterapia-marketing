@@ -11,7 +11,8 @@ import {
 } from "@/lib/dashboard";
 import { usuarioActual } from "@/lib/supabase/servidor";
 import { identidadDe } from "@/components/identidad";
-import { Mascotas } from "@/components/mascotas";
+import { Planta } from "@/components/planta";
+import { leerFrasesDePlanta } from "@/lib/planta";
 
 /**
  * Header shared by every tab: five real routes, not client-side tabs, so each
@@ -66,9 +67,10 @@ export async function Nav({
   activa: string;
   ctx: Contexto;
 }) {
-  const [ultimaSync, usuario] = await Promise.all([
+  const [ultimaSync, usuario, frasesPlanta] = await Promise.all([
     leerUltimaSync(),
     usuarioActual(),
+    leerFrasesDePlanta(ctx.pais),
   ]);
 
   return (
@@ -112,9 +114,10 @@ export async function Nav({
         </div>
       </div>
 
-      {/* items-end so the mascots at the end of the row stand on the divider
-          rather than floating above it. */}
-      <nav className="contenedor flex items-end gap-5 pt-3 text-sm">
+      {/* `relative` para que la planta se cuelgue de acá. Está fuera del flujo
+          a propósito: cuando era un hijo más, su alto decidía el alto de la
+          barra y separaba las pestañas del título. */}
+      <nav className="contenedor relative flex items-end gap-5 pt-3 text-sm">
         {PESTANAS.map((p) => (
           <Link
             key={p.href}
@@ -129,7 +132,7 @@ export async function Nav({
           </Link>
         ))}
 
-        <Mascotas />
+        <Planta frases={frasesPlanta} />
       </nav>
     </header>
   );

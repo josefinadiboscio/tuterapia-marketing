@@ -27,8 +27,19 @@ import { useEffect, useRef } from "react";
 const CADA_MS = 90_000;
 /** Cuánto queda el globo en pantalla. */
 const GLOBO_MS = 6_000;
-/** Fracción del carril por milisegundo, cuando camina. */
-const VELOCIDAD = 0.00055;
+/**
+ * Fracción del carril por milisegundo, cuando camina.
+ *
+ * El carril deja 106px de recorrido. Con el valor anterior —0,00055— un paseo
+ * de medio carril se resolvía en 900 milisegundos: la planta llegaba al otro
+ * extremo antes de que nadie levantara la vista. Caminaba de verdad y no se
+ * veía nunca.
+ *
+ * Acá un paseo corto son unos tres segundos y uno largo casi ocho. Sigue
+ * siendo el mismo rincón y la misma distancia corta; lo que cambió es que
+ * ahora se puede mirar mientras pasa.
+ */
+const VELOCIDAD = 0.00009;
 
 type Estado = "quieta" | "medita" | "camina";
 
@@ -75,8 +86,9 @@ export function Planta({ frases }: { frases: string[] }) {
       estado = nuevo;
       planta!.classList.toggle("medita", nuevo === "medita");
       if (nuevo === "camina") {
-        // Un paseíto: entre un quinto y medio carril, para cualquier lado.
-        const salto = azar(0.2, 0.5) * (Math.random() < 0.5 ? -1 : 1);
+        // Un paseo: entre un cuarto y dos tercios del carril, para cualquier
+        // lado. Con menos que eso el desplazamiento no se lee como tal.
+        const salto = azar(0.25, 0.7) * (Math.random() < 0.5 ? -1 : 1);
         destino = Math.min(1, Math.max(0, x + salto));
         dir = destino > x ? 1 : -1;
       }
@@ -85,9 +97,14 @@ export function Planta({ frases }: { frases: string[] }) {
 
     function siguiente(ahora: number) {
       const r = Math.random();
-      if (r < 0.5) cambiar("medita", ahora, azar(18_000, 38_000));
-      else if (r < 0.85) cambiar("quieta", ahora, azar(8_000, 16_000));
-      else cambiar("camina", ahora, azar(3_000, 6_000));
+      // Meditar sigue siendo lo que más hace, pero caminar pasó de uno de cada
+      // siete cambios a uno de cada tres: antes salía un paseo cada dos
+      // minutos y duraba menos de un segundo.
+      if (r < 0.4) cambiar("medita", ahora, azar(14_000, 26_000));
+      else if (r < 0.65) cambiar("quieta", ahora, azar(6_000, 12_000));
+      // El paseo termina cuando llega, no cuando se cumple el plazo. El plazo
+      // es solo un tope por si el carril cambia de ancho a mitad de camino.
+      else cambiar("camina", ahora, 12_000);
     }
 
     function parpadear() {
@@ -162,10 +179,12 @@ export function Planta({ frases }: { frases: string[] }) {
         inclina = paso * 2.4;
         hojas = Math.sin(ahora / 240 - 0.7) * 3.2;
       } else if (estado === "medita" && !quieto) {
-        respira = 1 + Math.sin(ahora / 1_700) * 0.022;
-        hojas = Math.sin(ahora / 2_400) * 1.1;
+        respira = 1 + Math.sin(ahora / 1_700) * 0.04;
+        hojas = Math.sin(ahora / 2_400) * 2;
       } else if (!quieto) {
-        hojas = Math.sin(ahora / 3_200) * 0.8;
+        // Parada tampoco es inmóvil: las hojas se mecen. Con 0,8 grados no se
+        // notaba y la planta parecía una imagen pegada.
+        hojas = Math.sin(ahora / 2_600) * 2.2;
       }
 
       planta!.style.transform =

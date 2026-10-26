@@ -3,6 +3,7 @@ import { withMysql } from "@/lib/mysql";
 import { withDb } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/auth";
 import { sincronizarFunnel, DIAS_DE_FUNNEL } from "@/lib/sync-funnel";
+import { sincronizarTerapeuta } from "@/lib/sync-terapeuta";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,12 @@ export const maxDuration = 60;
  * window can be rebuilt in pieces:
  *   ?dias=760&offset=380  →  the older half
  *   ?dias=380             →  the recent half
+ *
+ * De paso escribe `eligieron_terapeuta`, que obedece a la misma regla: no es
+ * un hecho del mes sino un estado de hoy, así que tampoco se congela. Vive acá
+ * y no en /api/cron/sync porque ese job muere a los 60 segundos sin llegar al
+ * mes anterior, que es justo el que esta métrica necesita releer. Son dos
+ * consultas agrupadas y este job cierra en cuatro segundos.
  */
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
@@ -35,8 +42,11 @@ export async function GET(request: Request) {
   const startedAt = Date.now();
 
   try {
-    const filas = await withMysql((mysql) =>
-      withDb((db) => sincronizarFunnel(mysql, db, dias, offset)),
+    const { filas, terapeuta } = await withMysql((mysql) =>
+      withDb(async (db) => ({
+        filas: await sincronizarFunnel(mysql, db, dias, offset),
+        terapeuta: await sincronizarTerapeuta(mysql, db),
+      })),
     );
 
     await withDb((db) =>
@@ -47,7 +57,14 @@ export async function GET(request: Request) {
       ),
     );
 
-    return NextResponse.json({ ok: true, dias, offset, filas, ms: Date.now() - startedAt });
+    return NextResponse.json({
+      ok: true,
+      dias,
+      offset,
+      filas,
+      terapeuta,
+      ms: Date.now() - startedAt,
+    });
   } catch (error) {
     const mensaje = error instanceof Error ? error.message : "unknown error";
     console.error("[cron/funnel] failed", error);

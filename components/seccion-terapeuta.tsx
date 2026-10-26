@@ -73,6 +73,7 @@ export function SeccionTerapeuta({
         formatoId="entero"
         identidad={identidadDe(pais)}
         apiladas
+        leyendaEnCurso="sin terminar"
       />
 
       <Lectura vista={vista} />
@@ -98,14 +99,14 @@ function Lectura({ vista }: { vista: ReturnType<typeof armarTerapeuta> }) {
         <p className="text-texto">
           En {mesCorto(ultimaMadura.mes)}, {entero(ultimaMadura.eligieron)} de{" "}
           {entero(ultimaMadura.registros)} registros llegaron a elegir terapeuta
-          — {porcentaje(ultimaMadura.parte, 0)}. Los otros{" "}
+          — {porcentaje(ultimaMadura.parte)}. Los otros{" "}
           {entero(ultimaMadura.sinTerapeuta)} no pasaron de ahí
           {previaMadura === null ? (
             "."
           ) : (
             <>
               , y la parte que elige viene de{" "}
-              {porcentaje(previaMadura.parte, 0)} en{" "}
+              {porcentaje(previaMadura.parte)} en{" "}
               {mesCorto(previaMadura.mes)}.
             </>
           )}
@@ -125,7 +126,16 @@ function Lectura({ vista }: { vista: ReturnType<typeof armarTerapeuta> }) {
   );
 }
 
-/** "oct · 0 días" — la edad va al lado, como las cohortes del funnel. */
+/**
+ * "oct · en curso" o "sep · cerró hace 5 días".
+ *
+ * La edad va al lado, como las cohortes proyectadas del funnel, pero no para
+ * el mes que está corriendo: ahí la cuenta da cero —el mes todavía no
+ * terminó— y "oct · 0 días" se lee como un error de cálculo en vez de como
+ * un mes a medio andar.
+ */
 function etiquetaInmadura(m: MesTerapeuta): string {
-  return `${mesCorto(m.mes)} · ${m.edadDias} ${m.edadDias === 1 ? "día" : "días"}`;
+  if (m.edadDias === 0) return `${mesCorto(m.mes)} · en curso`;
+  const dias = `${m.edadDias} ${m.edadDias === 1 ? "día" : "días"}`;
+  return `${mesCorto(m.mes)} · cerró hace ${dias}`;
 }

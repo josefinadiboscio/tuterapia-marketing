@@ -8,11 +8,7 @@ import {
   transcurridoEnMes,
   type Pais,
 } from "@/lib/queries/shared";
-import {
-  registros,
-  registrosPorSource,
-  registrosConTerapeuta,
-} from "@/lib/queries/registros";
+import { registros, registrosPorSource } from "@/lib/queries/registros";
 import {
   pacientesNuevos,
   pacientesActivados,
@@ -56,14 +52,6 @@ type Fila = {
   pais: string;
   plataforma: string;
   registros: number | null;
-  /**
-   * De esos registros, cuántos llegaron a tener terapeuta asignado.
-   *
-   * Es un estado de hoy y no un evento: la columna de origen no tiene fecha.
-   * Una cohorte de menos de 30 días todavía está eligiendo, así que la fila
-   * lleva `cohorte_edad_dias` al lado y la pantalla la marca.
-   */
-  eligieron_terapeuta: number | null;
   pacientes_nuevos: number | null;
   pacientes_activados: number | null;
   pacientes_activos: number | null;
@@ -331,7 +319,6 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     compradores,
     histSesion,
     historico,
-    conTerapeuta,
   ] = await Promise.all([
     registros(mysql, rango, pais),
     pacientesNuevos(mysql, rango, pais),
@@ -351,7 +338,6 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     compradoresDeCohorte(mysql, mes, pais),
     diasHastaPrimeraSesion(mysql, mes, pais),
     sesionesHistoricoPorPaciente(mysql, mes, pais),
-    registrosConTerapeuta(mysql, rango, pais),
   ]);
 
   return {
@@ -373,7 +359,6 @@ async function medirPais(mysql: Connection, mes: string, pais: Pais) {
     compradores,
     histSesion,
     historico,
-    conTerapeuta,
   };
 }
 
@@ -420,7 +405,6 @@ function armarFila({
     pais,
     plataforma,
     registros: medido.registros,
-    eligieron_terapeuta: medido.conTerapeuta,
     pacientes_nuevos: medido.nuevos,
     pacientes_activados: medido.activados,
     pacientes_activos: medido.activos,
@@ -538,7 +522,6 @@ function armarTotal(
     pais: "TOTAL",
     plataforma: "TODAS",
     registros: suma((m) => m.registros),
-    eligieron_terapeuta: suma((m) => m.conTerapeuta),
     pacientes_nuevos: nuevos,
     pacientes_activados: suma((m) => m.activados),
     pacientes_activos: suma((m) => m.activos),
@@ -705,7 +688,6 @@ function filaVacia(
     pais,
     plataforma,
     registros: null,
-    eligieron_terapeuta: null,
     pacientes_nuevos: null,
     pacientes_activados: null,
     pacientes_activos: null,
@@ -750,12 +732,12 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        churn_rate, es_provisorio, registros_tramo_previo,
        pacientes_nuevos_tramo_previo, pacientes_activos_tramo_previo,
        conversion_tramo, conversion_tramo_previo,
-       tramo_dias, eligieron_terapeuta, actualizado_en
+       tramo_dias, actualizado_en
      ) values (
        $1, $2, $3, $4, $5, $6, $7, $8,
        $9, $10, $11, $12, $13, $14, $15, $16,
        $17, $18, $19, $20, $21, $22, $23, $24,
-       $25, $26, $27, $28, $29, $30, $31, $32, now()
+       $25, $26, $27, $28, $29, $30, $31, now()
      )
      on conflict (mes, pais, plataforma) do update set
        registros = excluded.registros,
@@ -786,7 +768,6 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
        conversion_tramo = excluded.conversion_tramo,
        conversion_tramo_previo = excluded.conversion_tramo_previo,
        tramo_dias = excluded.tramo_dias,
-       eligieron_terapeuta = excluded.eligieron_terapeuta,
        actualizado_en = now()`,
     [
       `${fila.mes}-01`,
@@ -820,7 +801,6 @@ async function upsert(db: Client, fila: Fila): Promise<void> {
       fila.conversion_tramo,
       fila.conversion_tramo_previo,
       fila.tramo_dias,
-      fila.eligieron_terapeuta,
     ],
   );
 }

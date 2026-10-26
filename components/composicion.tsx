@@ -32,11 +32,21 @@ export function Composicion({
   indice,
   meses,
   formato,
+  leyendaEnCurso = "en curso",
 }: {
   series: Serie[];
   indice: number;
   meses: { mes: string; enCurso: boolean }[];
   formato: (n: number | null) => string;
+  /**
+   * Cómo se llama un mes marcado, cuando "en curso" no es lo que pasa.
+   *
+   * En volumen un mes marcado es el que está corriendo y la palabra es
+   * literal. En "eligieron terapeuta" lo marcado es una cohorte que todavía
+   * está eligiendo, y un octubre ya cerrado pero sin madurar diría "en curso"
+   * sobre un mes terminado.
+   */
+  leyendaEnCurso?: string;
 }) {
   const mes = meses[indice];
   if (!mes) return null;
@@ -48,7 +58,7 @@ export function Composicion({
     <aside className="rounded-lg border border-borde bg-surface px-4 py-3 lg:w-[420px] lg:shrink-0">
       <p className="text-xs uppercase tracking-wide text-ter">
         {nombreDeMes(mes.mes)}
-        {mes.enCurso ? " · en curso" : ""}
+        {mes.enCurso ? ` · ${leyendaEnCurso}` : ""}
       </p>
       <p className="mt-0.5 text-xl text-texto">{formato(total)}</p>
 

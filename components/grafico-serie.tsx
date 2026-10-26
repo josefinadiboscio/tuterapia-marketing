@@ -58,6 +58,7 @@ export function GraficoSerie({
   apiladas = false,
   utm = [],
   rate = false,
+  leyendaEnCurso,
 }: {
   series: Serie[];
   tipo: "barras" | "linea";
@@ -74,6 +75,8 @@ export function GraficoSerie({
   utm?: Punto[];
   /** A rate is not summed, so the tooltip shows each source's own value. */
   rate?: boolean;
+  /** Cómo nombra el panel un mes marcado. Por defecto, "en curso". */
+  leyendaEnCurso?: string;
 }) {
   const [activo, setActivo] = useState<number | null>(null);
   const valores = series.flatMap((s) =>
@@ -346,6 +349,7 @@ export function GraficoSerie({
           indice={indicePanel}
           meses={meses}
           formato={FORMATO[formatoId]}
+          leyendaEnCurso={leyendaEnCurso}
         />
       ) : null}
     </div>

@@ -817,6 +817,118 @@ mes anterior. Escalarla solo a la proyección clava la marca de referencia en el
 extremo cuando el mes anterior cerró más alto, y entonces un mes que viene
 abajo parece empatar.
 
+## 6 quinquies. Eligieron terapeuta
+
+De los registros de un mes, cuántos llegaron a tener un terapeuta asignado y
+cuántos se quedaron sin uno. Vive en General, entre sesiones vendidas y
+economía.
+
+```
+eligieron_terapeuta[mes, pais] = registros del mes con
+                                 pacientes.id_terapeuta IS NOT NULL
+sin_terapeuta                  = registros − eligieron_terapeuta
+```
+
+**Es el escalón que faltaba.** El funnel de este tablero arranca en la compra,
+así que el tramo registro → terapeuta → compra no aparecía en ninguna pantalla,
+y es donde se va la mayoría. Medido sobre los registros de julio de 2026 en
+adelante:
+
+| | Registros | Compraron |
+|---|---:|---:|
+| Con terapeuta | 19.460 | 2.725 |
+| Sin terapeuta | 8.355 | **1** |
+
+Uno sobre 8.355. **Elegir terapeuta no es un dato de perfil, es la puerta**: sin
+terapeuta no hay compra, así que los 8.355 son el techo de lo que se puede
+ganar arreglando ese paso, y es más grande que cualquier palanca de Ads.
+
+Se guarda **solo el numerador**. El denominador es `registros`, que ya está en
+la misma fila de `marketing.metricas_mensuales`, y la barra apilada de la
+pantalla suma exactamente el número que muestra la card de Registros arriba.
+Dos columnas que tienen que sumar entre sí es una forma de que algún día no
+sumen.
+
+Se usa `pacientes.id_terapeuta IS NOT NULL` y **no** `terminarRegistro`, por la
+regla de §1: los dos no coinciden —10.697 pacientes tienen el flag en 1 y
+terapeuta igual— y la columna es la que dice la verdad. Los 127.381 registros
+tienen fila en `pacientes` (medido: ninguna cohorte de los últimos trece meses
+tiene un registro sin fila), así que no hay un tercer grupo escondido.
+
+### Es un estado de hoy, no un evento
+
+`pacientes.id_terapeuta` **no tiene fecha propia**, y `modificacion` se mueve
+con cualquier edición de la fila, así que no se puede saber *cuándo* eligió
+nadie. Esto no es "eligió dentro de los 30 días" como la conversión: es "tiene
+terapeuta hoy".
+
+De ahí sale toda la dificultad, y la única forma de medir cuánto tarda la
+elección es comparar cohortes de distinta edad:
+
+| Edad de la cohorte | Parte que eligió |
+|---|---:|
+| 1–4 días | 15–22% |
+| ~3 semanas | 42–48% |
+| 23–25 días | 67–78% |
+| Meses cerrados | 73–82% |
+
+**Una cohorte tarda unos 25 días en terminar de elegir**, y después no se mueve
+más: marzo de 2026, con siete meses, marca 75,6%, y septiembre, con uno, 76,7%.
+
+Dos consecuencias:
+
+- **El mes en curso no se compara con los cerrados.** Octubre a mitad de camino
+  marca 44,7% en AR, y eso no es una caída: es una cohorte sin terminar. La
+  pantalla la marca con su edad al lado —la misma convención que las cohortes
+  proyectadas del funnel— y la lectura automática del pie compara los dos
+  últimos meses **maduros**, nunca el que está corriendo.
+- **La madurez se mide desde el registro más nuevo**, no desde el primero del
+  mes. Un mes que cerró ayer tiene registros de un día, así que
+  `cohorte_edad_dias` (que cuenta desde el día 1) no sirve para esto: la regla
+  es que el último día del mes tenga 25 días o más.
+
+Son 25 y no los 30 de la ventana de conversión porque la curva ya está plana a
+los 23. Con 30, el mes anterior quedaría marcado como sin terminar durante todo
+el mes siguiente, y marcar de sin terminar un número que ya no se mueve engaña
+igual que no marcar el que sí se mueve.
+
+### Esta columna SÍ se recalcula, y no la escribe `/api/cron/sync`
+
+Es la segunda excepción a "nunca recalcular un mes cerrado", por la misma razón
+que el funnel sobre compradores (§8): no es un hecho del mes, es un estado de
+hoy. La cohorte de octubre sigue subiendo durante todo noviembre, así que un
+valor escrito una vez y nunca más queda clavado en su número inmaduro.
+
+Y el sync mensual no puede hacerse cargo, por una razón medida el 2026-10-26:
+
+```
+18:27:30  arranca /api/cron/sync con meses = [2026-10, 2026-09]
+18:28:14  commitea 2026-10          (44 s)
+18:28:29  FUNCTION_INVOCATION_TIMEOUT a los 60 s, sin llegar a 2026-09
+```
+
+En `marketing.sync_log` **todas** las corridas nocturnas de `/api/cron/sync`
+figuran con `error = 'sin terminar'`: el mes en curso entra, el anterior no. O
+sea que el único mes que esta métrica necesita releer es justo el que ese job
+nunca vuelve a tocar.
+
+Por eso la escribe **`/api/cron/funnel`**, que cierra en cuatro segundos y
+tiene cincuenta y seis libres: dos consultas agrupadas, una por país, sobre los
+últimos 13 meses, y un `update` de esa sola columna —nunca un `insert`, para no
+crear una fila con todo en null si el sync todavía no escribió ese mes.
+
+El sync nocturno no la toca en absoluto. Si la tocara, bastaría con que una
+noche escribiera un mes y otra no para que la serie tuviera dos autores con dos
+criterios.
+
+### Lo que esta métrica no dice
+
+No dice **por qué** no eligieron, ni cuántos de los que no eligieron siguen
+siendo recuperables. Tampoco se abre por plataforma: la consulta que hay es una
+sola por país y mes, y un corte por `utm_source` necesitaría otra consulta en
+un job que ya corre contra el techo de 60 segundos. Si hiciera falta, el lugar
+es el grano de campaña, no esta fila.
+
 ## 7. UTMs
 
 Columnas en `login`: `utm_source`, `utm_campaign`, `utm_content`.
@@ -1081,6 +1193,7 @@ create table marketing.metricas_mensuales (
   pais                text    not null,
   plataforma          text,              -- null = todas
   registros           int,
+  eligieron_terapeuta int,           -- §6 quinquies: estado de hoy, no evento
   pacientes_nuevos    int,
   pacientes_activos   int,
   conversion_cohorte  numeric,
@@ -1164,8 +1277,11 @@ MySQL. Se borra y se reinserta el rango en una transacción, en lugar de hacer
 upsert: un pago que se desconfirma tiene que desaparecer, y un upsert lo
 dejaría ahí para siempre.
 
-`marketing.metricas_mensuales` sigue intacta bajo la regla original. La
-excepción es de estas dos tablas y de ningún otro agregado.
+`marketing.metricas_mensuales` sigue intacta bajo la regla original, con **una
+sola columna afuera**: `eligieron_terapeuta` (§6 quinquies), que es un estado de
+hoy y no un hecho del mes, y que por eso la reescribe este mismo job sobre los
+últimos 13 meses. El resto de la fila la sigue escribiendo `/api/cron/sync` con
+la regla de siempre.
 
 `marketing.cohorte_sesiones` se queda donde está, con la cohorte de registro
 mensual: de ahí sale la exportación de cohorte (`/api/funnel/csv`). Son dos

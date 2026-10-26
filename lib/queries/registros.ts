@@ -1,5 +1,10 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
-import { monthRangeUtc, type Pais, type Rango } from "./shared";
+import {
+  monthRangeUtc,
+  LOCAL_UTC_OFFSET_HOURS,
+  type Pais,
+  type Rango,
+} from "./shared";
 
 /**
  * Registros: rows in `login` with tipo = 1, by month of `creacion`
@@ -53,41 +58,57 @@ export async function registrosPorSource(
 }
 
 /**
- * De los registros del mes, cuántos llegaron a tener un terapeuta asignado.
+ * Por mes local, cuántos registros hay y cuántos llegaron a tener terapeuta.
  *
- * `pacientes.id_terapeuta IS NOT NULL` y no `terminarRegistro`, por la regla de
- * METRICAS.md §1: los dos no coinciden —10.697 pacientes tienen el flag en 1 y
- * terapeuta igual— y la columna es la que dice la verdad.
+ * Devuelve la ventana entera en UNA consulta y no un mes por llamada, porque
+ * esta métrica no se congela como las demás. `pacientes.id_terapeuta` no tiene
+ * fecha propia —`modificacion` se mueve con cualquier edición de la fila— así
+ * que es un estado de HOY: la cohorte de octubre sigue subiendo durante todo
+ * noviembre y recién a las tres o cuatro semanas deja de moverse. Un mes
+ * escrito una sola vez y nunca más quedaría clavado en su valor inmaduro.
  *
- * Es un INNER JOIN y no un LEFT porque no hace falta: los 127.381 registros
- * tienen fila en `pacientes`, medido (`sin_fila_de_paciente` = 0 en los trece
- * meses del probe). Si algún día dejara de ser cierto, el total de registros
- * seguiría saliendo de `registros()` y esta consulta solo aportaría el
- * numerador, así que un registro sin fila contaría como "sin terapeuta", que
- * es lo que es.
+ * Es el mismo caso que el funnel sobre compradores, que por eso tampoco se
+ * congela (METRICAS.md §8), y por eso esta consulta vive al lado de aquella y
+ * no adentro del bucle mensual del sync.
  *
- * Lo que esta consulta NO puede contestar es cuándo lo eligió. La columna no
- * tiene fecha propia y `modificacion` se mueve con cualquier edición de la
- * fila, así que esto es un estado de hoy, no un evento. De ahí sale la regla
- * de madurez: una cohorte tarda unas tres o cuatro semanas en terminar de
- * elegir —medido: a cuatro días de registrarse va en 15–22%, a tres semanas en
- * 42–48%, y los meses cerrados quedan planos en 73–82%— así que el mes en
- * curso no es comparable con los cerrados y hay que decirlo en pantalla.
+ * Se usa `pacientes.id_terapeuta IS NOT NULL` y no `terminarRegistro`, por la
+ * regla de METRICAS.md §1: los dos no coinciden —10.697 pacientes tienen el
+ * flag en 1 y terapeuta igual— y la columna es la que dice la verdad.
+ *
+ * El INNER JOIN alcanza: los 127.381 registros tienen fila en `pacientes`,
+ * medido sobre trece cohortes. Igual el denominador sale de acá y no de
+ * `registros()`, así que los dos lados de la división cuentan exactamente las
+ * mismas filas aunque algún día aparezca un registro sin perfil.
  */
-export async function registrosConTerapeuta(
+export async function registrosYTerapeutaPorMes(
   conn: Connection,
   rango: Rango,
   pais: Pais,
-): Promise<number> {
+): Promise<{ mes: string; registros: number; conTerapeuta: number }[]> {
   const { start, end } = rango;
-  const [rows] = await conn.query<(RowDataPacket & { n: number })[]>(
-    `SELECT COUNT(*) AS n
+  // El mes se corta en hora local, como todo el resto (METRICAS.md §1). El
+  // rango ya viene corrido, así que el índice sobre `creacion` sigue sirviendo
+  // y el DATE_SUB solo decide a qué mes va cada fila ya filtrada.
+  const [rows] = await conn.query<
+    (RowDataPacket & { mes: string; registros: number; con_terapeuta: number })[]
+  >(
+    `SELECT DATE_FORMAT(
+              DATE_SUB(l.creacion, INTERVAL ${LOCAL_UTC_OFFSET_HOURS} HOUR),
+              '%Y-%m') AS mes,
+            COUNT(*) AS registros,
+            SUM(p.id_terapeuta IS NOT NULL) AS con_terapeuta
        FROM login l
        JOIN pacientes p ON p.id_login = l.id
       WHERE l.tipo = 1 AND l.paisDominio = ?
         AND l.creacion >= ? AND l.creacion < ?
-        AND p.id_terapeuta IS NOT NULL`,
+      GROUP BY 1
+      ORDER BY 1`,
     [pais, start, end],
   );
-  return Number(rows[0]?.n ?? 0);
+
+  return rows.map((r) => ({
+    mes: r.mes,
+    registros: Number(r.registros),
+    conTerapeuta: Number(r.con_terapeuta),
+  }));
 }

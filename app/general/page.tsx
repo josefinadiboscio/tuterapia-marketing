@@ -16,6 +16,7 @@ import { leerGeneral, type MesSerie, type VistaGeneral } from "@/lib/dashboard";
 import { leerSesiones, DIAS_DE_BARRAS } from "@/lib/sesiones";
 import { GraficoSesiones } from "@/components/grafico-sesiones";
 import { PanelSesiones } from "@/components/panel-sesiones";
+import { SeccionTerapeuta } from "@/components/seccion-terapeuta";
 import { tendencia, lectura, MESES_TENDENCIA, type Tendencia } from "@/lib/tendencia";
 import {
   entero,
@@ -208,6 +209,12 @@ export default async function General({
                 <PanelSesiones vista={sesiones} mes={mesEnCurso} />
               </div>
             </section>
+
+            {/* El tramo que faltaba: entre cuánta gente entra y cuánto
+                cuesta, dónde se queda la mayoría. El Funnel arranca en la
+                compra, así que registro → terapeuta no estaba en ninguna
+                pantalla, y es el corte más grande que hay. */}
+            <SeccionTerapeuta serie={vista.serie} pais={ctx.pais} />
 
             <Bloque
               titulo="Economía"

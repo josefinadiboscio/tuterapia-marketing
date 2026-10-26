@@ -4,6 +4,14 @@ import { withDb } from "@/lib/db";
 export type MesSerie = {
   mes: string;
   registros: number | null;
+  /**
+   * De los registros del mes, cuántos llegaron a tener terapeuta.
+   *
+   * Estado de hoy, no un evento: la columna de origen no tiene fecha. Una
+   * cohorte de menos de 30 días todavía está eligiendo, así que este número
+   * solo se compara contra otro mes cuando los dos están maduros.
+   */
+  eligieron_terapeuta: number | null;
   pacientes_nuevos: number | null;
   pacientes_activos: number | null;
   conversion_cohorte: number | null;
@@ -75,7 +83,8 @@ export async function leerGeneral(
   return withDb(async (db) => {
     const [serie, disponibles, sync] = await Promise.all([
       db.query<MesSerie & { registros: string }>(
-        `select to_char(mes, 'YYYY-MM') as mes, registros, pacientes_nuevos,
+        `select to_char(mes, 'YYYY-MM') as mes, registros, eligieron_terapeuta,
+                pacientes_nuevos,
                 pacientes_activos, conversion_cohorte, cac_usd,
                 costo_por_registro_usd, ltv_usd, sesiones_historico,
                 es_provisorio,
@@ -105,7 +114,8 @@ export async function leerGeneral(
         ? await Promise.all(
             PAISES_REALES.map(async (p) => {
               const { rows } = await db.query(
-                `select to_char(mes, 'YYYY-MM') as mes, registros, pacientes_nuevos,
+                `select to_char(mes, 'YYYY-MM') as mes, registros, eligieron_terapeuta,
+                        pacientes_nuevos,
                         pacientes_activos, conversion_cohorte, cac_usd,
                         costo_por_registro_usd, ltv_usd, sesiones_historico,
                 es_provisorio,
@@ -172,6 +182,7 @@ function normalizar(fila: Record<string, unknown>): MesSerie {
   return {
     mes: String(fila.mes),
     registros: num(fila.registros),
+    eligieron_terapeuta: num(fila.eligieron_terapeuta),
     pacientes_nuevos: num(fila.pacientes_nuevos),
     pacientes_activos: num(fila.pacientes_activos),
     conversion_cohorte: num(fila.conversion_cohorte),

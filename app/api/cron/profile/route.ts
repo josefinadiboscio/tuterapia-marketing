@@ -106,6 +106,63 @@ const PROBES: Record<string, string> = {
       FROM pacientes p JOIN login l ON l.id = p.id_login
      WHERE l.tipo = 1 GROUP BY p.terminarRegistro`,
 
+  // How many of a month's registrations end up with a therapist assigned, by
+  // cohort. `pacientes.id_terapeuta` has NO date of its own — `modificacion`
+  // moves on any edit of the row — so the only thing the base can answer is
+  // "has one today". That makes the maturity question the whole question: if
+  // the share is flat across cohorts, including the newest, choosing happens
+  // on the way in and a closed month can be frozen. If it climbs with age,
+  // the running month is not comparable to the closed ones and needs saying.
+  //
+  // `sin_fila_de_paciente` is counted separately because a registration with
+  // no row in `pacientes` is also "no therapist", and it should not be mixed
+  // up with one that has the row and left the field empty.
+  terapeuta_por_cohorte: `
+    SELECT l.paisDominio AS pais,
+           DATE_FORMAT(DATE_SUB(l.creacion, INTERVAL 3 HOUR), '%Y-%m') AS mes,
+           COUNT(*) AS registros,
+           SUM(p.id_login IS NULL) AS sin_fila_de_paciente,
+           SUM(p.id_terapeuta IS NOT NULL) AS con_terapeuta,
+           ROUND(SUM(p.id_terapeuta IS NOT NULL) / COUNT(*) * 100, 1) AS pct
+      FROM login l
+      LEFT JOIN pacientes p ON p.id_login = l.id
+     WHERE l.tipo = 1 AND l.paisDominio IN ('AR','UY')
+       AND l.creacion >= '2025-10-01 03:00:00'
+     GROUP BY 1, 2 ORDER BY 1, 2`,
+
+  // The same share day by day over the last three weeks. Without an
+  // assignment date this is the only way to see HOW LONG the choice takes: if
+  // yesterday's registrations already sit at the cohort's level, it happens on
+  // the way in; if the last few days run below the older ones, it takes days
+  // and the running month is measuring a cohort that has not finished.
+  terapeuta_por_dia: `
+    SELECT DATE_FORMAT(DATE_SUB(l.creacion, INTERVAL 3 HOUR), '%Y-%m-%d') AS dia,
+           COUNT(*) AS registros,
+           SUM(p.id_terapeuta IS NOT NULL) AS con_terapeuta,
+           ROUND(SUM(p.id_terapeuta IS NOT NULL) / COUNT(*) * 100, 1) AS pct
+      FROM login l
+      LEFT JOIN pacientes p ON p.id_login = l.id
+     WHERE l.tipo = 1 AND l.paisDominio IN ('AR','UY')
+       AND l.creacion >= DATE_SUB(CURDATE(), INTERVAL 24 DAY)
+     GROUP BY 1 ORDER BY 1`,
+
+  // Does having a therapist actually gate the purchase? If nearly every buyer
+  // has one, the stage sits before the sale and the people without one are the
+  // ones who never got that far. If buyers without a therapist are common, it
+  // is a profile field and not a funnel stage, and the whole framing changes.
+  terapeuta_vs_compra: `
+    SELECT l.paisDominio AS pais,
+           p.id_terapeuta IS NOT NULL AS con_terapeuta,
+           COUNT(*) AS registros,
+           SUM(pp.id_paciente IS NOT NULL) AS compraron
+      FROM login l
+      LEFT JOIN pacientes p ON p.id_login = l.id
+      LEFT JOIN (SELECT DISTINCT id_paciente FROM pacientes_pagos
+                  WHERE confirmado = 1) pp ON pp.id_paciente = l.id
+     WHERE l.tipo = 1 AND l.paisDominio IN ('AR','UY')
+       AND l.creacion >= '2026-07-01 03:00:00'
+     GROUP BY 1, 2 ORDER BY 1, 2`,
+
   // MySQL 8 has window functions, 5.7 does not. Decides how percentiles run.
   version: `SELECT VERSION() AS version`,
 

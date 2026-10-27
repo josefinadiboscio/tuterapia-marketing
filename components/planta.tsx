@@ -41,9 +41,35 @@ const GLOBO_MS = 6_000;
  */
 const VELOCIDAD = 0.00009;
 
+/**
+ * Por dónde va la ronda de las frases que dice al tocarla.
+ *
+ * Vive afuera del componente porque cada pestaña monta su propio header: con
+ * el contador adentro, la ronda empezaría de nuevo en cada cambio de pestaña y
+ * podría repetir la que acababa de decir. La primera vez arranca en un lugar
+ * al azar, para que no abra siempre con la misma.
+ */
+let turno: number | null = null;
+
+function siguienteAlTocar(lista: string[]): string {
+  turno =
+    turno === null
+      ? Math.floor(Math.random() * lista.length)
+      : (turno + 1) % lista.length;
+  return lista[turno]!;
+}
+
 type Estado = "quieta" | "medita" | "camina";
 
-export function Planta({ frases }: { frases: string[] }) {
+export function Planta({
+  frases,
+  alTocar,
+}: {
+  /** Lo que dice sola cada tanto, al azar. */
+  frases: string[];
+  /** Lo que dice cuando la tocan, de a una y en ronda. */
+  alTocar: string[];
+}) {
   const carrilRef = useRef<HTMLDivElement>(null);
   const plantaRef = useRef<HTMLDivElement>(null);
   const follajeRef = useRef<SVGGElement>(null);
@@ -126,10 +152,8 @@ export function Planta({ frases }: { frases: string[] }) {
       globo!.style.right = `${carril!.clientWidth - izq + 6}px`;
     }
 
+    /** Lo que dice sola: una de las suyas, al azar y sin repetir la última. */
     function hablar() {
-      // Si estaba meditando, abre los ojos para hablar.
-      if (estado === "medita") cambiar("quieta", performance.now(), 9_000);
-
       let frase = frases[Math.floor(Math.random() * frases.length)]!;
       if (frases.length > 1) {
         while (frase === ultima) {
@@ -137,6 +161,12 @@ export function Planta({ frases }: { frases: string[] }) {
         }
       }
       ultima = frase;
+      decir(frase);
+    }
+
+    function decir(frase: string) {
+      // Si estaba meditando, abre los ojos para hablar.
+      if (estado === "medita") cambiar("quieta", performance.now(), 9_000);
 
       globo!.textContent = frase;
       colocarGlobo(x * (carril!.clientWidth - planta!.offsetWidth));
@@ -208,8 +238,12 @@ export function Planta({ frases }: { frases: string[] }) {
 
     // Apretarla cuenta como que habló: si no, decía lo suyo y a los dos
     // segundos volvía a hablar sola porque el reloj seguía donde estaba.
+    //
+    // Al tocarla dice la siguiente de la ronda. Si no le pasaron ninguna para
+    // eso, contesta con una de las suyas, como hacía antes.
     hablarRef.current = () => {
-      hablar();
+      if (alTocar.length > 0) decir(siguienteAlTocar(alTocar));
+      else hablar();
       clearInterval(reloj);
       reloj = setInterval(hablar, CADA_MS);
     };
@@ -224,7 +258,7 @@ export function Planta({ frases }: { frases: string[] }) {
       clearTimeout(cierreGlobo);
       for (const t of temporizadores) clearTimeout(t);
     };
-  }, [frases]);
+  }, [frases, alTocar]);
 
   return (
     /*

@@ -50,6 +50,8 @@ type Fila = {
 type Barata = { utm_source: string; costo: string } | null;
 
 export async function leerFrasesDePlanta(pais: string): Promise<FrasesPlanta> {
+  const PRUEBA: string | null = "VITTI ESTA ACA";
+  if (PRUEBA) return [PRUEBA];
   // El país TOTAL tiene su propia fila guardada, así que no hay que sumar nada
   // acá: se lee la fila que corresponda y listo.
   const frases = await withDb(async (db) => {

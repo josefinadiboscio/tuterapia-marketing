@@ -12,7 +12,7 @@ import {
 import { usuarioActual } from "@/lib/supabase/servidor";
 import { identidadDe } from "@/components/identidad";
 import { Planta } from "@/components/planta";
-import { leerFrasesDePlanta } from "@/lib/planta";
+import { MOTIVACIONALES, leerFrasesDePlanta } from "@/lib/planta";
 
 /**
  * Header shared by every tab: five real routes, not client-side tabs, so each
@@ -138,7 +138,7 @@ export async function Nav({
           </Link>
         ))}
 
-        <Planta frases={frasesPlanta} />
+        <Planta frases={frasesPlanta} alTocar={MOTIVACIONALES} />
       </nav>
     </header>
   );

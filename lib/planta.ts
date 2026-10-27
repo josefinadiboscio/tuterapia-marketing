@@ -38,6 +38,26 @@ const AMBIENTE = [
   "tomá agua",
 ];
 
+/**
+ * Las motivacionales. Son lo que dice cuando alguien la toca: una distinta por
+ * toque, y da la vuelta a las diez antes de repetir una.
+ *
+ * No se mezclan con lo que dice sola cada noventa segundos. Así tocarla tiene
+ * algo propio, y las frases con datos no quedan diluidas entre veinte más.
+ */
+export const MOTIVACIONALES = [
+  "vas mejor de lo que pensás",
+  "un paso a la vez también es avanzar",
+  "lo que sembrás hoy florece más adelante",
+  "crecer lleva tiempo, preguntale a cualquier planta",
+  "cada registro es alguien que se animó a pedir ayuda",
+  "de a poco también se llega",
+  "no hace falta poder con todo hoy",
+  "cada campaña enseña algo, salga como salga",
+  "date crédito: estás haciendo un montón",
+  "confiá en el proceso, como en terapia",
+];
+
 type Fila = {
   mes: string;
   registros: string | null;
@@ -50,8 +70,6 @@ type Fila = {
 type Barata = { utm_source: string; costo: string } | null;
 
 export async function leerFrasesDePlanta(pais: string): Promise<FrasesPlanta> {
-  const PRUEBA: string | null = "JOSE LA MEJOR";
-  if (PRUEBA) return [PRUEBA];
   // El país TOTAL tiene su propia fila guardada, así que no hay que sumar nada
   // acá: se lee la fila que corresponda y listo.
   const frases = await withDb(async (db) => {
